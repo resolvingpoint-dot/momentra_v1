@@ -67,4 +67,14 @@ celery_app.conf.update(
 # a circular import (task modules import ``celery_app`` from here).
 from app.workers import tasks as _tasks  # noqa: E402,F401
 
+# Mirror API lifespan registration: workers build personal pulse/moments/memory
+# via TemplateProjectionRegistry, which is empty until handlers are registered.
+from app.domains.personal.templates import (  # noqa: E402
+    register_template_projection_handlers,
+)
+from app.domains.projections.handlers import register_projection_handlers  # noqa: E402
+
+register_template_projection_handlers()
+register_projection_handlers()
+
 __all__ = ["celery_app"]

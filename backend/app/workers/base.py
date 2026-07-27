@@ -8,9 +8,12 @@ exponentially-backed-off retries with jitter. ``acks_late`` +
 from __future__ import annotations
 
 from app.core.config import settings
+from app.core.errors import TemplateNotRegisteredError
 
 RETRY_OPTS: dict = {
     "autoretry_for": (Exception,),
+    # Permanent config/registry misses must not thrash the refresh queue.
+    "dont_autoretry_for": (TemplateNotRegisteredError,),
     "max_retries": settings.celery_max_retries,
     "retry_backoff": True,
     "retry_backoff_max": settings.celery_retry_backoff_max,
