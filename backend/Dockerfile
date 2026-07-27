@@ -1,5 +1,5 @@
 # Momentra API — production image for Dokploy / Docker Compose.
-FROM python:3.12-slim
+FROM python:3.12-slim AS production
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
