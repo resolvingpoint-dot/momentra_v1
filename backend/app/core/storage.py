@@ -75,7 +75,9 @@ def assert_attachment_upload(
 
 
 def _public_base() -> str:
-    return (settings.storage_public_base_url or "").rstrip("/")
+    from app.core.config import settings as _settings
+
+    return (_settings.effective_storage_public_base_url or "").rstrip("/")
 
 
 def _extension_for(content_type: str | None) -> str:
@@ -219,7 +221,7 @@ def get_storage() -> StorageBackend:
     if _backend is None:
         _backend = (
             SupabaseStorageBackend()
-            if settings.storage_public_base_url
+            if settings.effective_storage_public_base_url
             else StubStorageBackend()
         )
     return _backend

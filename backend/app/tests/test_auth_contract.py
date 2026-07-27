@@ -117,14 +117,32 @@ def test_validate_production_security_rejects_unsafe_flags():
         session_secret_key="",
         cors_origins_str="*",
         storage_public_base_url="",
+        supabase_url="",
     )
     try:
         validate_production_security(unsafe)
         assert False, "expected RuntimeError"
     except RuntimeError as exc:
         msg = str(exc)
-        assert "64" in msg or "APP_SESSION_SECRET" in msg
-        assert "STORAGE_PUBLIC_BASE_URL" in msg or "https" in msg
+        assert "48" in msg or "APP_SESSION_SECRET" in msg
+        assert "STORAGE_PUBLIC_BASE_URL" in msg or "SUPABASE_URL" in msg or "https" in msg
+
+
+def test_validate_production_security_accepts_supabase_url_fallback():
+    from app.core.config import Settings, validate_production_security
+
+    ok = Settings.model_construct(
+        debug=False,
+        momentra_env="production",
+        allow_test_auth=False,
+        app_session_secret="x" * 48,
+        session_secret_key="",
+        cors_origins_str="https://www.momentra.tech",
+        storage_public_base_url="",
+        supabase_url="https://example.supabase.co",
+    )
+    validate_production_security(ok)
+    assert ok.effective_storage_public_base_url.startswith("https://example.supabase.co/")
 
 
 def test_refresh_rejects_garbage(client: TestClient, mock_db):

@@ -57,6 +57,19 @@ class Settings(BaseSettings):
     # Object storage (avatars / moment covers). When unset, upload URLs are
     # stubbed with a relative path so the contract works without a bucket.
     storage_public_base_url: str = ""
+    # Optional: used to derive STORAGE_PUBLIC_BASE_URL when that is unset
+    # (Dokploy often already has SUPABASE_URL from the project setup).
+    supabase_url: str = ""
+
+    @property
+    def effective_storage_public_base_url(self) -> str:
+        explicit = (self.storage_public_base_url or "").strip().rstrip("/")
+        if explicit:
+            return explicit
+        base = (self.supabase_url or "").strip().rstrip("/")
+        if base.startswith("https://"):
+            return f"{base}/storage/v1/object/public/momentra"
+        return ""
 
     # Base for shareable/email invite links. Defaults to the app's custom URL
     # scheme so links open the installed app directly; override with an https
@@ -145,16 +158,28 @@ def validate_production_security(cfg: Settings) -> None:
         errors.append("DEBUG must be false in production (MOMENTRA_ENV=production)")
     if cfg.allow_test_auth:
         errors.append("ALLOW_TEST_AUTH must not be enabled in production")
-    if len(cfg.effective_session_secret) < 64:
+    # Prefer ≥64; allow ≥48 so existing Dokploy JWT_SECRET values can boot
+    # while ops rotate to a longer APP_SESSION_SECRET.
+    secret_len = len(cfg.effective_session_secret)
+    if secret_len < 48:
         errors.append(
-            "APP_SESSION_SECRET (or JWT_SECRET) must be at least 64 characters in production"
+            "APP_SESSION_SECRET (or JWT_SECRET) must be at least 48 characters in production "
+            "(64+ recommended; generate with: python -c \"import secrets; print(secrets.token_urlsafe(64))\")"
+        )
+    elif secret_len < 64:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "APP_SESSION_SECRET/JWT_SECRET is only %s chars; rotate to ≥64 for production hardening",
+            secret_len,
         )
 
-    storage = (cfg.storage_public_base_url or "").strip()
+    storage = cfg.effective_storage_public_base_url
     if not storage.startswith("https://"):
         errors.append(
             "STORAGE_PUBLIC_BASE_URL must be an https:// URL in production "
-            "(local-uploads are disabled)"
+            "(or set SUPABASE_URL so it can be derived as "
+            "{SUPABASE_URL}/storage/v1/object/public/momentra)"
         )
 
     origins = cfg.cors_origins
