@@ -6,7 +6,10 @@ import time
 from uuid import UUID
 
 from app.domains.personal.catalog import MOMENT_TYPES, normalize_moment_type_code
-from app.domains.personal.templates.registry import get_template_projection_registry
+from app.domains.personal.templates.registry import (
+    get_template_projection_registry,
+    register_template_projection_handlers,
+)
 from app.domains.projections.projection_builder import ProjectionSliceBuilder
 from app.domains.projections.projection_keys import PERSONAL_LIFE_TEMPLATE
 from app.workers.base import RETRY_OPTS
@@ -16,6 +19,9 @@ from app.workers.db import run_async, worker_session
 logger = logging.getLogger(__name__)
 
 _MY_MONEY_TEMPLATES = [mt.code for mt in MOMENT_TYPES]
+
+# Prefork children and eager imports can miss celery_app-side registration.
+register_template_projection_handlers()
 
 
 @celery_app.task(name="projections.refresh_pulse", bind=True, **RETRY_OPTS)
@@ -48,6 +54,9 @@ async def _refresh_slice(
 ) -> dict:
     start = time.perf_counter()
     code = normalize_moment_type_code(template)
+    # Idempotent: ensure handlers exist even if this worker process skipped
+    # celery_app registration (old image / fork import order).
+    register_template_projection_handlers()
     async with worker_session() as session:
         builder = ProjectionSliceBuilder(session)
         if slice_type == "pulse":
