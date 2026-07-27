@@ -45,4 +45,8 @@ async def worker_session() -> AsyncSession:
 
 def run_async(coro: Awaitable[T]) -> T:
     """Execute an awaitable to completion from synchronous Celery task code."""
+    # Drop any Redis client bound to a previous ``asyncio.run`` loop.
+    from app.core.cache import reset_redis_client
+
+    reset_redis_client()
     return asyncio.run(coro)

@@ -87,7 +87,7 @@ async def _next_version(user_id: UUID, template: str, slice_type: str) -> int:
         try:
             return int(await redis.incr(vkey))
         except Exception:
-            logger.warning("Redis INCR failed for %s", vkey)
+            logger.warning("Redis INCR failed for %s", vkey, exc_info=True)
     current = _in_memory_versions.get(vkey, 0) + 1
     _in_memory_versions[vkey] = current
     return current

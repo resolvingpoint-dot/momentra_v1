@@ -16,7 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0"
         // Production backend base URL.
-        buildConfigField("String", "API_BASE_URL", "\"https://backend.mallaapp.org\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api.mallaapp.org\"")
     }
 
     buildTypes {

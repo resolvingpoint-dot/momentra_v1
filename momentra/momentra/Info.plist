@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>API_BASE_URL</key>
-	<string>https://backend.mallaapp.org</string>
+	<string>https://api.mallaapp.org</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

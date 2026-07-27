@@ -5,21 +5,34 @@
 #   cp .env.example .env   # fill DATABASE_URL, secrets
 #   docker compose up --build
 #
-# Dokploy: point the app at this compose file with build context = backend/,
-# or deploy three services from the same image (api / worker / beat).
+# Dokploy (preferred full stack):
+#   Create a Compose application with this file (build context = backend/).
+#   Paste production secrets into Environment (Dokploy writes .env next to compose).
+#   Domains → service `api`, port 8000, host api.mallaapp.org
+#   Do not publish worker / beat / redis publicly.
+#   Compose forces REDIS_URL to redis://redis:6379/0 (ignore localhost from host .env).
+#
+# See DOKPLOY.md for step-by-step.
 
 services:
   api:
     build: .
     image: momentra-api:latest
     restart: unless-stopped
+    # Local smoke binds host port. Dokploy Traefik uses Domains → api:8000;
+    # host publish is optional there (set API_PUBLISH_PORT empty only if your
+    # Compose version supports omitting published ports; otherwise leave default).
     ports:
       - "${API_PUBLISH_PORT:-8000}:8000"
+    expose:
+      - "8000"
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8000
       # Compose service hostname (overrides host .env localhost Redis).
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       RUN_MIGRATIONS_ON_START: "${RUN_MIGRATIONS_ON_START:-true}"
     env_file:
       - .env
@@ -42,6 +55,8 @@ services:
     command: ["worker"]
     environment:
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       RUN_MIGRATIONS_ON_START: "false"
     env_file:
       - .env
@@ -58,6 +73,8 @@ services:
     command: ["beat"]
     environment:
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       RUN_MIGRATIONS_ON_START: "false"
     env_file:
       - .env
