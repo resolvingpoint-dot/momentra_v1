@@ -1,58 +1,59 @@
 # Dokploy Deployment Guide (Backend)
 
-This backend is deployment-ready on Dokploy using the included `Dockerfile`.
+This backend deploys with the included `Dockerfile` (API + optional Celery worker/beat).
 
 ## 1) Create service in Dokploy
 
-- **Type:** Dockerfile
-- **Context path:** `backend`
-- **Dockerfile path:** `Dockerfile`
-- **Container port:** `8002` (or use Dokploy's `PORT` injection)
+- **Build type:** Dockerfile
+- **Docker Context Path:** `backend`
+- **Docker File:** `Dockerfile` (or `backend/Dockerfile` if context is repo root)
+- **Container port:** `8000` (or Dokploy’s injected `PORT`)
 
-## 2) Set environment variables
+For Celery as separate services (same image):
 
-Required for production:
+| Service | Command | Extra env |
+|---|---|---|
+| API | default (`api`) | `RUN_MIGRATIONS_ON_START=true` |
+| Worker | `worker` | `RUN_MIGRATIONS_ON_START=false` |
+| Beat | `beat` | `RUN_MIGRATIONS_ON_START=false` |
 
-- `DATABASE_URL` (Postgres connection string)
-- `FIREBASE_PROJECT_ID`
-- one of:
-  - `FIREBASE_SERVICE_ACCOUNT_JSON` (raw JSON)
-  - `FIREBASE_SERVICE_ACCOUNT_JSON_B64` (base64 JSON)
-  - `FIREBASE_CREDENTIALS_PATH` (path inside container)
+Or deploy [`docker-compose.yml`](docker-compose.yml) (api + worker + beat + redis).
+
+## 2) Environment variables
+
+Required for production (`DEBUG=false`):
+
+- `DATABASE_URL` — Postgres / Supabase pooler
+- `APP_SESSION_SECRET` — random secret (required when `DEBUG=false`)
+- Firebase (one of):
+  - `FIREBASE_SERVICE_ACCOUNT_JSON_B64`
+  - `FIREBASE_CREDENTIALS_PATH`
+  - `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`
+- `CORS_ORIGINS_STR` — e.g. `https://www.momentra.tech,https://momentra.tech`
 
 Recommended:
 
-- `CORS_ORIGINS` (comma-separated origins)
-- `PUBLIC_APP_BASE_URL` (invite link base URL)
-- `MOMENTRA_UPLOAD_DIR` (defaults to `/app/uploads`)
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
-- `UVICORN_WORKERS` (default `1`; increase only after removing startup DDL/backfill work)
+- `REDIS_URL` — required for Celery; e.g. `redis://redis:6379/0` on compose, or your Dokploy Redis host
+- `MOMENTRA_APP_INVITE_BASE_URL` — e.g. `https://www.momentra.tech/invite`
+- `MOMENTRA_RESEND_API_KEY` / `MOMENTRA_RESEND_FROM`
+- `UVICORN_WORKERS` (default `1`)
 
-Optional dev/testing only:
-
-- `FIREBASE_AUTH_DISABLED=true`
+Do **not** set `ALLOW_TEST_AUTH=true` in production.
 
 ## 3) Health check
 
-The container exposes:
+- Liveness: `GET /health` → `{"status":"ok",...}`
+- Readiness: `GET /health/ready` (DB / Redis / Celery)
 
-- `GET /health` -> `{"status":"ok"}`
+Dockerfile healthcheck uses `/health`.
 
-Docker healthcheck is already configured in `Dockerfile` against `/health`.
+## 4) Migrations
 
-## 4) Start command
-
-No custom command needed. The image runs:
-
-- `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8002}`
+API container runs `alembic upgrade head` on start when `RUN_MIGRATIONS_ON_START=true` (default for API).
 
 ## 5) First deploy validation
 
-After deploy, validate:
-
 - `/health` returns 200
 - `/docs` loads
-- `/openapi.json` loads
-- app can authenticate and read personal/group/business endpoints
-
+- Auth exchange + a personal/group pulse call succeed
+- If using workers: Celery connects to Redis (not `localhost` inside the container)

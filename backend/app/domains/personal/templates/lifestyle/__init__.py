@@ -1,0 +1,1 @@
+"""Lifestyle template projection package."""

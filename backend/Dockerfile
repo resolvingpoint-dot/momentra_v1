@@ -1,24 +1,33 @@
+# Momentra API — production image for Dokploy / Docker Compose.
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# System libs for psycopg2-binary/runtime TLS certs
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
+# Runtime deps for psycopg2-binary / health probes (optional curl).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY alembic.ini .
+COPY alembic ./alembic
+COPY app ./app
+COPY scripts/docker-entrypoint.sh scripts/docker-worker-entrypoint.sh ./scripts/
 
-EXPOSE 8002
+RUN chmod +x scripts/docker-entrypoint.sh scripts/docker-worker-entrypoint.sh \
+    && mkdir -p .local-uploads
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:' + __import__('os').environ.get('PORT','8002') + '/health', timeout=3)"
+EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8002} --workers ${UVICORN_WORKERS:-1}"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT:-${API_PORT:-8000}}/health" || exit 1
 
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
+CMD ["api"]

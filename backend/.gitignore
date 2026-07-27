@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -7,5 +9,12 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 dist/
+.local-uploads/
+artifacts/
 serviceAccount*.json
 *-firebase-adminsdk-*.json
+scripts/*_dbg_out.txt
+scripts/*_log.txt
+scripts/*_last_result.json
+scripts/*_perf_snapshot.json
+_t85perf.py

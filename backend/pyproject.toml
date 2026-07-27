@@ -1,34 +1,65 @@
-[build-system]
-requires = ["hatchling>=1.25.0"]
-build-backend = "hatchling.build"
-
 [project]
-name = "momentra-api"
+name = "momentra-backend"
 version = "0.1.0"
-description = "Momentra API — FastAPI, Supabase, Firebase"
-requires-python = ">=3.11"
-dependencies = [
-  "fastapi>=0.115.0",
-  "uvicorn[standard]>=0.32.0",
-  "pydantic-settings>=2.6.0",
-  "supabase>=2.10.0",
-  "firebase-admin>=6.6.0",
-  "python-multipart>=0.0.12",
-  "httpx>=0.27.0",
-]
-
-[project.optional-dependencies]
-dev = [
-  "ruff>=0.8.0",
-  "pytest>=8.0.0",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["app"]
+description = "Momentra backend API (FastAPI + async SQLAlchemy)."
+requires-python = ">=3.12"
 
 [tool.ruff]
-line-length = 100
-target-version = "py311"
+line-length = 120
+target-version = "py312"
+# Generated Alembic migrations embed large verbatim SQL strings and are verified
+# separately; linting them adds noise without value.
+extend-exclude = ["alembic/versions", "_prodcheck.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+# A focused, correctness-oriented gate: pyflakes (F), pycodestyle errors (E/W),
+# bugbear (B) and async-safety (ASYNC). Style-only churn (import sorting,
+# pyupgrade) is intentionally out of the enforced gate for this large,
+# partly code-generated codebase.
+select = ["E", "F", "W", "B", "ASYNC"]
+ignore = [
+    "E501",  # line length: long typed router signatures / generated schemas
+    "E741",  # ambiguous var names in a few generated helpers
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are called in argument defaults by
+# design; they are effectively immutable singletons, so B006/B008 must not fire.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# SQLAlchemy models reference sibling-domain classes by *string* name inside
+# ``Mapped["X"]`` / ``relationship("X")`` forward references. These resolve
+# against the shared ORM registry at mapper-configuration time (verified by a
+# successful ``configure_mappers()``), so ruff's static F821 is a false positive.
+"**/models.py" = ["F821"]
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+markers = [
+    "celery_enqueue: opt in to real Celery enqueue assertions in tests",
+    "perf: performance smoke tests (non-blocking budgets)",
+    "acceptance: financial / API acceptance suite",
+    "financial: Decimal ledger and money correctness",
+    "security: authz and tenant isolation",
+    "resilience: cache / redis / celery failure behavior",
+    "performance: latency contracts",
+    "e2e: browser Playwright tests",
+    "redis: requires redis",
+    "celery: celery-related",
+    "slow: multi-user / live-DB acceptance",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.*",
+    "ignore:.*Select.froms.*:DeprecationWarning",
+]

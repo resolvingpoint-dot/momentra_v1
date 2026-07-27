@@ -1,0 +1,62 @@
+{
+  "scenario": "Goa Trip Financial Journey",
+  "currency": "INR",
+  "sign_convention": "net = paid - share; positive receives; negative owes",
+  "obsolete_balances_never_use": {
+    "santosh": "4050.00",
+    "rahul": "3350.00",
+    "priya": "-3450.00",
+    "kiran": "-3950.00"
+  },
+  "users": [
+    {"key": "santosh", "firebase_uid": "test:santosh", "display_name": "Santosh"},
+    {"key": "rahul", "firebase_uid": "test:rahul", "display_name": "Rahul"},
+    {"key": "priya", "firebase_uid": "test:priya", "display_name": "Priya"},
+    {"key": "kiran", "firebase_uid": "test:kiran", "display_name": "Kiran"},
+    {"key": "anjali", "firebase_uid": "test:anjali", "display_name": "Anjali"},
+    {"key": "stranger", "firebase_uid": "test:stranger", "display_name": "Stranger"}
+  ],
+  "personal_accounts_santosh": [
+    {"name": "Checking Account", "account_type": "CURRENT", "opening_balance": "30000.00"},
+    {"name": "Cash", "account_type": "CASH", "opening_balance": "4000.00"},
+    {"name": "UPI Wallet", "account_type": "WALLET", "opening_balance": "2500.00"},
+    {"name": "Credit Card", "account_type": "CREDIT_CARD", "opening_balance": "0.00", "credit_limit": "50000.00"}
+  ],
+  "liquid_balance_expected": "36500.00",
+  "group": {"name": "Goa Trip", "currency": "INR"},
+  "pre_settlement": {
+    "santosh": "6250.00",
+    "rahul": "2250.00",
+    "priya": "-3950.00",
+    "kiran": "-4550.00"
+  },
+  "post_settlement_kiran_to_santosh_2500": {
+    "santosh": "3750.00",
+    "rahul": "2250.00",
+    "priya": "-3950.00",
+    "kiran": "-2050.00"
+  },
+  "post_hotel_edit_after_settlement": {
+    "santosh": "4350.00",
+    "rahul": "2050.00",
+    "priya": "-4150.00",
+    "kiran": "-2250.00"
+  },
+  "post_scooter_delete_after_edit": {
+    "santosh": "3450.00",
+    "rahul": "2950.00",
+    "priya": "-4150.00",
+    "kiran": "-2250.00"
+  },
+  "operation_order": [
+    "accounts",
+    "group_and_members",
+    "expenses_1_to_6",
+    "assert_pre_settlement",
+    "settlement_preview",
+    "settlement_kiran_to_santosh_2500",
+    "hotel_edit_9000",
+    "scooter_delete",
+    "membership_history"
+  ]
+}

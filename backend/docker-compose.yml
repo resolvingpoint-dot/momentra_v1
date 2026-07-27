@@ -1,20 +1,82 @@
-# Dockge: set the project stack directory to this folder (`backend/`) so `build.context: .`
-# and paths like `./secrets/...` resolve next to this file.
+# Production stack for Dokploy / self-hosted deploy.
+# Set DATABASE_URL (e.g. Supabase pooler) in Dokploy env — Postgres is not bundled here.
 #
-# Default stack: no Firebase file mount — use FIREBASE_SERVICE_ACCOUNT_JSON in `.env` (one line).
-# For file-based credentials instead, merge docker-compose.firebase-file.yml (see .env.example).
+# Quick start (local smoke):
+#   cp .env.example .env   # fill DATABASE_URL, secrets
+#   docker compose up --build
+#
+# Dokploy: point the app at this compose file with build context = backend/,
+# or deploy three services from the same image (api / worker / beat).
 
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Local tag only — do not pull from Docker Hub (avoids "pull access denied" in Dockge).
+    build: .
     image: momentra-api:latest
-    pull_policy: never
-    container_name: momentra-api
     restart: unless-stopped
     ports:
-      - "8002:8002"
+      - "${API_PUBLISH_PORT:-8000}:8000"
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      # Compose service hostname (overrides host .env localhost Redis).
+      REDIS_URL: redis://redis:6379/0
+      RUN_MIGRATIONS_ON_START: "${RUN_MIGRATIONS_ON_START:-true}"
     env_file:
       - .env
+    volumes:
+      - api_uploads:/app/.local-uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  worker:
+    build: .
+    image: momentra-api:latest
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RUN_MIGRATIONS_ON_START: "false"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  beat:
+    build: .
+    image: momentra-api:latest
+    restart: unless-stopped
+    command: ["beat"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RUN_MIGRATIONS_ON_START: "false"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis_data:/data
+
+volumes:
+  api_uploads:
+  redis_data:
