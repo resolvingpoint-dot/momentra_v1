@@ -132,6 +132,10 @@ class StorageBackend(ABC):
         key = path.lstrip("/")
         if base:
             return f"{base}/{key}"
+        if settings.is_production or not settings.debug:
+            raise RuntimeError(
+                "STORAGE_PUBLIC_BASE_URL is required; local-uploads are disabled outside DEBUG"
+            )
         return f"/local-uploads/{key}"
 
 
@@ -181,12 +185,23 @@ class SupabaseStorageBackend(StorageBackend):
     async def signed_url(
         self, path: str, *, expires_in: int = 3600, method: str = "PUT"
     ) -> str:
-        _ = expires_in
+        """Emit a time-limited-style URL for direct client upload/download.
+
+        Full Supabase signed-URL SDK wiring can replace this later; today we
+        require an https public base and append a short expiry query hint so
+        clients never fall back to open ``/local-uploads`` in production.
+        """
         base = _public_base()
         key = path.lstrip("/")
-        if base:
-            return f"{base}/{key}"
-        return f"/local-uploads/{key}?method={method}"
+        if not base:
+            if settings.is_production or not settings.debug:
+                raise RuntimeError(
+                    "STORAGE_PUBLIC_BASE_URL is required for signed uploads"
+                )
+            return f"/local-uploads/{key}?method={method}&expires_in={expires_in}"
+        # Prefer explicit signed-style URL; bucket policies should enforce expiry.
+        sep = "&" if "?" in base else "?"
+        return f"{base}/{key}{sep}method={method}&expires_in={expires_in}"
 
     async def move(self, src: str, dest: str) -> None:
         await self.copy(src, dest)
@@ -211,13 +226,36 @@ def get_storage() -> StorageBackend:
 
 
 def build_upload_url(storage_path: str) -> str:
-    """Backward-compatible signed PUT URL helper."""
+    """Signed PUT URL helper. Production requires STORAGE_PUBLIC_BASE_URL."""
     base = _public_base()
     if base:
-        return f"{base}/{storage_path.lstrip('/')}"
+        if not base.startswith("https://") and settings.is_production:
+            raise RuntimeError(
+                "STORAGE_PUBLIC_BASE_URL must be https:// in production"
+            )
+        # Expiry query hint; bucket policies should enforce real TTL.
+        sep = "&" if "?" in f"{base}/{storage_path.lstrip('/')}" else "?"
+        return (
+            f"{base}/{storage_path.lstrip('/')}"
+            f"{sep}method=PUT&expires_in=3600"
+        )
+    if settings.is_production or not settings.debug:
+        raise RuntimeError(
+            "STORAGE_PUBLIC_BASE_URL is required; local-uploads are disabled outside DEBUG"
+        )
     return f"/local-uploads/{storage_path.lstrip('/')}"
 
 
 def public_url_for(storage_path: str) -> str:
     """Publicly readable URL for a stored object (persisted on the entity)."""
     return get_storage().public_url(storage_path)
+
+
+def require_remote_storage_configured() -> None:
+    """Raise if production/non-debug would fall back to open local uploads."""
+    if settings.is_production or not settings.debug:
+        base = _public_base()
+        if not base.startswith("https://"):
+            raise RuntimeError(
+                "STORAGE_PUBLIC_BASE_URL must be an https:// URL when DEBUG=false"
+            )

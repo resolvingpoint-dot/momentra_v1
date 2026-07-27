@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import auth, me, app as app_router, moments, my_money, group, group_app, group_shared, group_read, group_settlements, group_trips, business, business_app, business_active, circle, life360, memory, personal, invites, health, reference_data, metadata, debug
 from app.api import local_uploads
 import app.core.base  # noqa: F401  # register the full ORM model registry so cross-domain mappers resolve
-from app.core.config import settings
+from app.core.config import settings, validate_production_security
 from app.core.database import dispose_engine
 from app.core.exceptions import register_exception_handlers
 from app.core.firebase import init_firebase
@@ -19,6 +19,11 @@ from app.core.rate_limit import add_rate_limiting
 
 configure_logging(settings.debug)
 logger = logging.getLogger(__name__)
+
+# Fail closed before routes are reachable when production hardening applies.
+validate_production_security(settings)
+
+_disable_docs = settings.is_production
 
 
 @asynccontextmanager
@@ -45,13 +50,25 @@ async def lifespan(_app: FastAPI):
         logger.info("Database configured")
     else:
         logger.warning("DATABASE_URL not configured — DB-backed endpoints will fail")
-    logger.info("Momentra API started (debug=%s)", settings.debug)
+    logger.info(
+        "Momentra API started (debug=%s momentra_env=%s docs=%s)",
+        settings.debug,
+        settings.momentra_env or "(unset)",
+        "disabled" if _disable_docs else "enabled",
+    )
     yield
     await dispose_engine()
     logger.info("Momentra API shutdown complete")
 
 
-app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    lifespan=lifespan,
+    docs_url=None if _disable_docs else "/docs",
+    redoc_url=None if _disable_docs else "/redoc",
+    openapi_url=None if _disable_docs else "/openapi.json",
+)
 
 register_exception_handlers(app)
 
@@ -70,10 +87,15 @@ async def log_origin(request, call_next):
 
 
 if settings.debug:
+    # Explicit origins + credentials so local web can use HttpOnly refresh cookies
+    # (wildcard + credentials is forbidden by browsers).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
+        allow_origins=settings.cors_origins or [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -119,5 +141,11 @@ app.include_router(debug.router, prefix="/api/v1")
 # Health probes are mounted at the app root (no /api/v1 prefix) so infra probes
 # and the rate-limit exclusion list keep hitting stable /health paths.
 app.include_router(health.router)
-# Stub signed-upload target when STORAGE_PUBLIC_BASE_URL is unset.
-app.include_router(local_uploads.router)
+# Dev-only stub upload target. Production requires STORAGE_PUBLIC_BASE_URL and
+# never mounts public /local-uploads.
+if settings.debug and not settings.is_production:
+    app.include_router(local_uploads.router)
+elif settings.debug:
+    # DEBUG=true with MOMENTRA_ENV=production is refused by validate_*, but keep
+    # the guard explicit: never mount local uploads when env says production.
+    pass

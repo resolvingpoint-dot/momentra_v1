@@ -318,25 +318,38 @@ class PersonalAppService:
         *,
         force_refresh: bool = False,
         latest_active: dict[str, MomentModel] | None = None,
+        moment_type_code: str | None = None,
     ) -> s.PersonalPulseResponse:
         from app.domains.projections.projection_service import ProjectionReadService
 
         count = len(active)
         latest = latest_active if latest_active is not None else self._latest_by_code(active)
 
+        selected = normalize_moment_type_code(moment_type_code or "") or None
+
         if force_refresh:
-            for code in ("LIFE_OPERATIONS", "FUTURE_BUILDING", "LIFESTYLE", "RELATIONSHIPS"):
+            refresh_codes = (
+                (selected,)
+                if selected
+                else ("LIFE_OPERATIONS", "FUTURE_BUILDING", "LIFESTYLE", "RELATIONSHIPS")
+            )
+            for code in refresh_codes:
                 m = latest.get(code)
                 if m is not None and (code == "LIFE_OPERATIONS" or m.status in _ACTIVE_STATUSES):
                     await self._maybe_refresh_orchestration(m.id, force_refresh=True)
 
-        active_templates = sorted(
-            {
-                normalize_moment_type_code(m.moment_type or "")
-                for m in active
-                if m.moment_type
-            }
-        )
+        if selected:
+            active_templates = [selected] if any(
+                normalize_moment_type_code(m.moment_type or "") == selected for m in active
+            ) else []
+        else:
+            active_templates = sorted(
+                {
+                    normalize_moment_type_code(m.moment_type or "")
+                    for m in active
+                    if m.moment_type
+                }
+            )
         read = ProjectionReadService(self.session)
         composed = await read.get_aggregate_pulse(
             user_id,
@@ -428,11 +441,14 @@ class PersonalAppService:
         force_refresh: bool = False,
         moment_type_code: str | None = None,
     ) -> s.PersonalPulseResponse:
-        del moment_type_code
         _, _, active, _ = await self._load_moment_inventories(user_id)
         latest_active = self._latest_by_code(active)
         return await self._pulse_payload_from_moments(
-            user_id, active, force_refresh=force_refresh, latest_active=latest_active
+            user_id,
+            active,
+            force_refresh=force_refresh,
+            latest_active=latest_active,
+            moment_type_code=moment_type_code,
         )
 
     async def moments_home(
@@ -456,11 +472,20 @@ class PersonalAppService:
         fields = self._session_fields_from_moments(visible, active, latest)
         return s.PersonalSessionResponse(**fields).model_dump(mode="json")
 
-    async def get_inventory(self, user_id: UUID) -> dict:
-        """Lightweight inventory — cards + pulse without heavy moments detail builders."""
+    async def get_inventory(
+        self,
+        user_id: UUID,
+        *,
+        moment_type_code: str | None = None,
+    ) -> dict:
+        """Lightweight inventory — cards + selected-type pulse without heavy moments detail."""
         _, visible, active, latest = await self._load_moment_inventories(user_id)
         pulse = await self._pulse_payload_from_moments(
-            user_id, active, force_refresh=False, latest_active=self._latest_by_code(active)
+            user_id,
+            active,
+            force_refresh=False,
+            latest_active=self._latest_by_code(active),
+            moment_type_code=moment_type_code,
         )
         home = await self._moments_home_payload_from_moments(
             user_id, visible, active, latest, include_details=False
@@ -476,17 +501,17 @@ class PersonalAppService:
         force_refresh: bool = False,
         moment_type_code: str | None = None,
     ) -> dict:
-        """Thin composer — one inventory pass, derive pulse + moments_home."""
-        del moment_type_code
+        """Thin composer — one inventory pass, derive selected-type pulse + moments_home."""
         _, visible, active, latest = await self._load_moment_inventories(user_id)
         pulse = await self._pulse_payload_from_moments(
             user_id,
             active,
             force_refresh=force_refresh,
             latest_active=self._latest_by_code(active),
+            moment_type_code=moment_type_code,
         )
         home = await self._moments_home_payload_from_moments(
-            user_id, visible, active, latest, include_details=True
+            user_id, visible, active, latest, include_details=False
         )
         return s.PersonalSessionBootstrapResponse(
             pulse=pulse, moments_home=home
@@ -1089,20 +1114,30 @@ class PersonalAppService:
                 payload={"moment_type_code": code},
             )
         )
-        return self._map_moment(moment).model_dump(mode="json")
+        payload = self._map_moment(moment).model_dump(mode="json")
+        payload["projection_status"] = "REFRESHING"
+        return payload
 
     # ----- cover upload --------------------------------------------------- #
     async def cover_upload_url(
         self, user_id: UUID, moment_id: UUID, content_type: str
     ) -> dict:
+        from fastapi import HTTPException, status
+
         from app.core.storage import build_storage_path, build_upload_url
 
         moment = await self._require_moment(user_id, moment_id)
         storage_path = build_storage_path(
             f"personal/covers/{moment.id}", content_type
         )
+        try:
+            upload_url = build_upload_url(storage_path)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+            ) from exc
         return s.PersonalImageUploadUrlResponse(
-            upload_url=build_upload_url(storage_path),
+            upload_url=upload_url,
             storage_path=storage_path,
             token=None,
         ).model_dump(mode="json")

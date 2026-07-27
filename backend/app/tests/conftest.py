@@ -40,6 +40,7 @@ class MockSession:
             "business_operations_structure": {},
             "business_operations_governance_rules": {},
             "business_operations_budget_categories": {},
+            "auth_refresh_sessions": {},
         }
 
     def _get_from_store(self, store_name: str, key: str) -> Any:

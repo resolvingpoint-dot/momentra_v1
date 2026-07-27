@@ -53,7 +53,13 @@ class FirebaseExchangeResponse(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    """Body refresh token (mobile). Web may omit and send the HttpOnly cookie."""
+
+    refresh_token: str | None = None
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str | None = None
 
 
 class UserProfileUpdateRequest(BaseModel):

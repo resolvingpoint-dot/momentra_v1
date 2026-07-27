@@ -4,6 +4,7 @@ from app.domains.users.models import Base
 from app.domains.preferences.models import UserPreferencesModel  # noqa: F401
 from app.domains.module_states.models import ModuleStateModel  # noqa: F401
 from app.domains.moments.models import MomentModel, MomentMediaModel  # noqa: F401
+from app.domains.auth.models import AuthRefreshSessionModel  # noqa: F401
 
 # Momentra domain models (personal / group / business / circle / life360).
 # Importing the modules registers every model on the shared Base so that

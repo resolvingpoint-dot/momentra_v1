@@ -56,10 +56,27 @@ async def avatar_upload_url(
     auth_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    from app.core.storage import assert_attachment_upload
+
     user = await _require_user(auth_user, db)
-    storage_path = build_storage_path(f"avatars/{user.id}", body.content_type)
+    try:
+        assert_attachment_upload(
+            content_type=body.content_type,
+            byte_size=body.byte_size,
+            purpose="avatar",
+        )
+        storage_path = build_storage_path(f"avatars/{user.id}", body.content_type)
+        upload_url = build_upload_url(storage_path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     return ImageUploadUrlResponse(
-        upload_url=build_upload_url(storage_path),
+        upload_url=upload_url,
         storage_path=storage_path,
         token=None,
     ).model_dump(mode="json")

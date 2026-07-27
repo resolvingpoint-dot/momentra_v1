@@ -36,7 +36,33 @@ def test_firebase_exchange_missing_token(mock_verify, client: TestClient, mock_d
 
 
 @patch("app.api.v1.auth.verify_firebase_token")
-def test_refresh_returns_new_tokens(mock_verify, client: TestClient, mock_db):
+def test_refresh_rotates_and_rejects_reuse(mock_verify, client: TestClient, mock_db):
+    mock_verify.return_value = FIREBASE_CLAIMS
+
+    exchange = client.post(
+        "/api/v1/auth/firebase/exchange",
+        json={"id_token": "firebase-id-token"},
+    )
+    assert exchange.status_code == 200
+    old_refresh = exchange.json()["tokens"]["refresh_token"]
+
+    first = client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh})
+    assert first.status_code == 200
+    new_refresh = first.json()["refresh_token"]
+    assert new_refresh != old_refresh
+
+    reuse = client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh})
+    assert reuse.status_code == 401
+
+    # Family revoke: even the rotated token should fail after reuse detection.
+    after_reuse = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": new_refresh}
+    )
+    assert after_reuse.status_code == 401
+
+
+@patch("app.api.v1.auth.verify_firebase_token")
+def test_logout_revokes_refresh(mock_verify, client: TestClient, mock_db):
     mock_verify.return_value = FIREBASE_CLAIMS
 
     exchange = client.post(
@@ -45,11 +71,60 @@ def test_refresh_returns_new_tokens(mock_verify, client: TestClient, mock_db):
     )
     refresh_token = exchange.json()["tokens"]["refresh_token"]
 
+    logout = client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+    assert logout.status_code == 200
+
     resp = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+    assert resp.status_code == 401
+
+
+@patch("app.api.v1.auth.verify_firebase_token")
+def test_logout_all_revokes_other_sessions(mock_verify, client: TestClient, mock_db):
+    mock_verify.return_value = FIREBASE_CLAIMS
+
+    first = client.post(
+        "/api/v1/auth/firebase/exchange",
+        json={"id_token": "firebase-id-token"},
+    )
+    second = client.post(
+        "/api/v1/auth/firebase/exchange",
+        json={"id_token": "firebase-id-token"},
+    )
+    access = first.json()["tokens"]["access_token"]
+    other_refresh = second.json()["tokens"]["refresh_token"]
+
+    resp = client.post(
+        "/api/v1/auth/logout-all",
+        headers={"Authorization": f"Bearer {access}"},
+    )
     assert resp.status_code == 200
-    tokens = resp.json()
-    assert tokens["access_token"]
-    assert tokens["refresh_token"]
+    assert resp.json()["revoked"] >= 1
+
+    denied = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": other_refresh}
+    )
+    assert denied.status_code == 401
+
+
+def test_validate_production_security_rejects_unsafe_flags():
+    from app.core.config import Settings, validate_production_security
+
+    unsafe = Settings.model_construct(
+        debug=False,
+        momentra_env="production",
+        allow_test_auth=False,
+        app_session_secret="x" * 32,
+        session_secret_key="",
+        cors_origins_str="*",
+        storage_public_base_url="",
+    )
+    try:
+        validate_production_security(unsafe)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        msg = str(exc)
+        assert "64" in msg or "APP_SESSION_SECRET" in msg
+        assert "STORAGE_PUBLIC_BASE_URL" in msg or "https" in msg
 
 
 def test_refresh_rejects_garbage(client: TestClient, mock_db):

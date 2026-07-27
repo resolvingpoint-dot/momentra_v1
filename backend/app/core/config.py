@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_name: str = "Momentra API"
     app_version: str = "0.1.0"
     debug: bool = False
+    # Explicit production signal (Dokploy should set MOMENTRA_ENV=production).
+    momentra_env: str = Field(default="", validation_alias="MOMENTRA_ENV")
 
     # Firebase Admin
     firebase_credentials_path: str = ""
@@ -35,6 +37,11 @@ class Settings(BaseSettings):
     @property
     def effective_session_secret(self) -> str:
         return self.app_session_secret or self.session_secret_key
+
+    @property
+    def is_production(self) -> bool:
+        """True when explicitly production or when DEBUG is off."""
+        return self.momentra_env.strip().lower() == "production" or not self.debug
 
     # Supabase / PostgreSQL
     database_url: str = ""
@@ -121,6 +128,44 @@ class Settings(BaseSettings):
                 "ALLOW_TEST_AUTH requires DEBUG=true; refusing to enable test login in production."
             )
         return self
+
+
+def validate_production_security(cfg: Settings) -> None:
+    """Refuse to boot with unsafe production configuration.
+
+    Invoked when ``MOMENTRA_ENV=production`` or ``DEBUG=false``. Clear errors
+    so Dokploy / ops can fix env without guessing.
+    """
+    if not cfg.is_production:
+        return
+
+    errors: list[str] = []
+
+    if cfg.debug:
+        errors.append("DEBUG must be false in production (MOMENTRA_ENV=production)")
+    if cfg.allow_test_auth:
+        errors.append("ALLOW_TEST_AUTH must not be enabled in production")
+    if len(cfg.effective_session_secret) < 64:
+        errors.append(
+            "APP_SESSION_SECRET (or JWT_SECRET) must be at least 64 characters in production"
+        )
+
+    storage = (cfg.storage_public_base_url or "").strip()
+    if not storage.startswith("https://"):
+        errors.append(
+            "STORAGE_PUBLIC_BASE_URL must be an https:// URL in production "
+            "(local-uploads are disabled)"
+        )
+
+    origins = cfg.cors_origins
+    if not origins:
+        errors.append("CORS_ORIGINS_STR must list explicit origins in production")
+    elif any(o.strip() == "*" for o in origins):
+        errors.append("CORS_ORIGINS_STR must not include '*' when credentials are enabled")
+
+    if errors:
+        joined = "; ".join(errors)
+        raise RuntimeError(f"Production security check failed: {joined}")
 
 
 settings = Settings()

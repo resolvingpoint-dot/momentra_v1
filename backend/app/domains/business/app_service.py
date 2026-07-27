@@ -437,12 +437,12 @@ class BusinessAppService:
         visible = await self._visible_moments(user_id, workspace_id=ws_id)
         # Fallback for pre-workspace rows: if scoped inventory empty but user owns
         # BUSINESS moments and has a selected workspace, show owned moments once.
+        # Reuse memberships already loaded above — only hit moments table once more.
         if ws_id is not None and not visible:
-            owned = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
-            owned_visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
             mapped = await self.workspaces.moment_ids_for_workspace(ws_id)
             if not mapped:
-                visible = owned_visible
+                owned = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
+                visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
 
         pulse = self._pulse_payload_from_moments(visible)
         home = self._moments_home_payload_from_moments(visible)
@@ -632,12 +632,20 @@ class BusinessAppService:
     async def cover_upload_url(
         self, user_id: UUID, moment_id: UUID, content_type: str
     ) -> dict:
+        from fastapi import HTTPException, status
+
         from app.core.storage import build_storage_path, build_upload_url
 
         moment = await self._require_moment(user_id, moment_id)
         storage_path = build_storage_path(f"business/covers/{moment.id}", content_type)
+        try:
+            upload_url = build_upload_url(storage_path)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+            ) from exc
         return s.BusinessImageUploadUrlResponse(
-            upload_url=build_upload_url(storage_path),
+            upload_url=upload_url,
             storage_path=storage_path,
             token=None,
         ).model_dump(mode="json")

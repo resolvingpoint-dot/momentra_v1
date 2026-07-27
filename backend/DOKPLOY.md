@@ -28,21 +28,32 @@ That compose file starts:
 
 Dokploy writes the Environment editor to a `.env` file next to the compose file. This compose already uses `env_file: .env`, so paste the same secrets you used for the API app:
 
-Required when `DEBUG=false`:
+**Production hardening (required)** — the API calls `validate_production_security` when `MOMENTRA_ENV=production` **or** `DEBUG=false`. Misconfiguration exits the process with a clear error:
+
+| Variable | Production value |
+|----------|------------------|
+| `MOMENTRA_ENV` | `production` |
+| `DEBUG` | `false` |
+| `ALLOW_TEST_AUTH` | unset / `false` |
+| `APP_SESSION_SECRET` | ≥64 random characters |
+| `CORS_ORIGINS_STR` | explicit HTTPS origins (no `*`), e.g. `https://www.momentra.tech,https://momentra.tech` |
+| `STORAGE_PUBLIC_BASE_URL` | `https://…` object storage base (no local-upload fallback) |
+
+Also required:
 
 - `DATABASE_URL` — Postgres / Supabase pooler
-- `APP_SESSION_SECRET` — random secret
 - Firebase (one of):
   - `FIREBASE_SERVICE_ACCOUNT_JSON_B64`
   - `FIREBASE_CREDENTIALS_PATH`
   - `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`
-- `CORS_ORIGINS_STR` — e.g. `https://www.momentra.tech,https://momentra.tech`
 
 Recommended:
 
 - `MOMENTRA_APP_INVITE_BASE_URL` — e.g. `https://www.momentra.tech/invite`
 - `MOMENTRA_RESEND_API_KEY` / `MOMENTRA_RESEND_FROM`
 - `UVICORN_WORKERS` (default `1`)
+
+**OpenAPI:** In production (`DEBUG=false` / `MOMENTRA_ENV=production`) `/docs`, `/redoc`, and `/openapi.json` are disabled. Expect 404.
 
 **Redis / Celery:** do **not** set `REDIS_URL` to `localhost`. Compose already forces:
 
@@ -55,6 +66,8 @@ CELERY_RESULT_BACKEND=redis://redis:6379/0
 on `api`, `worker`, and `beat`. You may omit `REDIS_URL` from the Dokploy Environment editor entirely.
 
 Do **not** set `ALLOW_TEST_AUTH=true` in production.
+
+**Network checklist:** Postgres, Redis, and Celery must not be host-published to the public internet. Compose already keeps Redis on the private network; only the `api` service should have a Dokploy domain.
 
 ### 3) Domains / ports
 
@@ -77,6 +90,13 @@ curl -H "Host: api.mallaapp.org" http://127.0.0.1:80/health/ready
 ```
 
 Expect ready JSON with `"database":"up","redis":"up","celery":"up"`.
+
+Also verify exposure:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://api.mallaapp.org/docs   # expect 404
+curl https://api.mallaapp.org/health                                   # expect 200
+```
 
 Worker logs should show Celery consuming queues; beat should show the scheduler started.
 

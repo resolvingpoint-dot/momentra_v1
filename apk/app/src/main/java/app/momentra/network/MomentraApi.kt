@@ -1,5 +1,6 @@
 package app.momentra.network
 
+import app.momentra.BuildConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
@@ -303,7 +304,14 @@ fun createMomentraApi(baseUrl: String): MomentraApi {
         isLenient = true
     }
     val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BASIC
+        level = if (BuildConfig.DEBUG) {
+            HttpLoggingInterceptor.Level.BASIC
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
+        redactHeader("Authorization")
+        redactHeader("Cookie")
+        redactHeader("Set-Cookie")
     }
     val client = OkHttpClient.Builder()
         .addInterceptor(logging)
