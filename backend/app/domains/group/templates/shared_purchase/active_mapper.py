@@ -6,6 +6,7 @@ from app.domains.group.templates.shared_purchase.context import SharedPurchaseCo
 from app.domains.group.templates.shared_purchase.life_mapper import build_life
 from app.domains.group.templates.shared_purchase.memory_mapper import build_memory_projection
 from app.domains.group.templates.shared_purchase.moments_mapper import build_moments
+from app.domains.group.templates.shared_purchase.projection_helpers import activities_newest
 from app.domains.group.templates.shared_purchase.pulse_mapper import build_pulse
 
 
@@ -119,7 +120,7 @@ def map_active_moments(ctx: SharedPurchaseContext) -> dict:
                 "event_action": str(a.get("title") or ""),
                 "event_time": a.get("occurred_at"),
             }
-            for a in ctx.activities[:10]
+            for a in activities_newest(ctx.activities, limit=10)
         ],
         "updates": [
             {
@@ -130,7 +131,7 @@ def map_active_moments(ctx: SharedPurchaseContext) -> dict:
                 "status": "posted",
                 "created_at": a.get("occurred_at"),
             }
-            for a in ctx.activities[:5]
+            for a in activities_newest(ctx.activities, limit=5)
         ],
         "operations_hub": hub,
         "memory_hero": moments.get("memory_hub", {}).get("hero"),

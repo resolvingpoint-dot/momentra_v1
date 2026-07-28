@@ -268,9 +268,16 @@ def insights(ctx: SharedExperienceContext) -> list[dict]:
     return out[:3]
 
 
+def activities_newest(activities: list[dict], *, limit: int = 5) -> list[dict]:
+    """Newest-first timeline slice for Pulse / Moments strips."""
+    rows = [a for a in activities if not a.get("deleted")]
+    rows.sort(key=lambda a: str(a.get("occurred_at") or ""), reverse=True)
+    return rows[:limit]
+
+
 def dashboard_recent_items(ctx: SharedExperienceContext) -> list[dict]:
     items: list[dict] = []
-    for a in ctx.activities[:5]:
+    for a in activities_newest(ctx.activities, limit=5):
         activity_id = str(a.get("id") or "").strip()
         if not activity_id:
             continue

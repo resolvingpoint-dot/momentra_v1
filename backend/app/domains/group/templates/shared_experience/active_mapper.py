@@ -5,6 +5,7 @@ from app.domains.group import moment_store as store
 from app.domains.group.templates.shared_experience.context import SharedExperienceContext
 from app.domains.group.templates.shared_experience.memory_mapper import build_memory_projection
 from app.domains.group.templates.shared_experience.moments_mapper import build_moments
+from app.domains.group.templates.shared_experience.projection_helpers import activities_newest
 from app.domains.group.templates.shared_experience.pulse_mapper import build_pulse
 from app.domains.group.templates.shared_experience.life_mapper import build_life
 
@@ -155,7 +156,7 @@ def map_active_moments(ctx: SharedExperienceContext) -> dict:
                 "event_action": str(a.get("title") or ""),
                 "event_time": a.get("occurred_at"),
             }
-            for a in ctx.activities[:10]
+            for a in activities_newest(ctx.activities, limit=10)
         ],
         "updates": [
             {
@@ -166,7 +167,7 @@ def map_active_moments(ctx: SharedExperienceContext) -> dict:
                 "status": "posted",
                 "created_at": a.get("occurred_at"),
             }
-            for a in ctx.activities[:5]
+            for a in activities_newest(ctx.activities, limit=5)
         ],
         "operations_hub": hub,
         "memory_hero": moments.get("memory_hero"),
