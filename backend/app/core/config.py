@@ -54,12 +54,34 @@ class Settings(BaseSettings):
     db_pool_timeout: int = 30
     db_pool_recycle: int = 1800
 
-    # Object storage (avatars / moment covers). When unset, upload URLs are
-    # stubbed with a relative path so the contract works without a bucket.
+    # Object storage (avatars / moment covers / memory media).
+    # When unset, upload URLs are stubbed with /local-uploads (DEBUG only).
     storage_public_base_url: str = ""
-    # Optional: used to derive STORAGE_PUBLIC_BASE_URL when that is unset
+    # Optional: derive STORAGE_PUBLIC_BASE_URL when that is unset
     # (Dokploy often already has SUPABASE_URL from the project setup).
     supabase_url: str = ""
+    # Service role / secret key — used server-side to mint signed upload & GET URLs
+    # for the private `momentra-attachments` bucket (never expose to clients).
+    supabase_secret_key: str = Field(default="", validation_alias="SUPABASE_SECRET_KEY")
+    # Storage bucket name (private; gallery uses signed GET URLs).
+    storage_bucket: str = Field(default="momentra-attachments", validation_alias="STORAGE_BUCKET")
+
+    @property
+    def effective_storage_bucket(self) -> str:
+        name = (self.storage_bucket or "").strip() or "momentra-attachments"
+        return name
+
+    @property
+    def effective_supabase_url(self) -> str:
+        explicit = (self.supabase_url or "").strip().rstrip("/")
+        if explicit:
+            return explicit
+        # Derive project root from STORAGE_PUBLIC_BASE_URL when possible.
+        public = (self.storage_public_base_url or "").strip().rstrip("/")
+        marker = "/storage/v1/object/public/"
+        if marker in public:
+            return public.split(marker, 1)[0].rstrip("/")
+        return ""
 
     @property
     def effective_storage_public_base_url(self) -> str:
@@ -68,7 +90,8 @@ class Settings(BaseSettings):
             return explicit
         base = (self.supabase_url or "").strip().rstrip("/")
         if base.startswith("https://"):
-            return f"{base}/storage/v1/object/public/momentra"
+            bucket = self.effective_storage_bucket
+            return f"{base}/storage/v1/object/public/{bucket}"
         return ""
 
     # Base for shareable/email invite links. Defaults to the app's custom URL
@@ -179,7 +202,12 @@ def validate_production_security(cfg: Settings) -> None:
         errors.append(
             "STORAGE_PUBLIC_BASE_URL must be an https:// URL in production "
             "(or set SUPABASE_URL so it can be derived as "
-            "{SUPABASE_URL}/storage/v1/object/public/momentra)"
+            "{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET})"
+        )
+    elif not (cfg.supabase_secret_key or "").strip():
+        errors.append(
+            "SUPABASE_SECRET_KEY is required in production to mint signed "
+            "upload/download URLs for the private storage bucket"
         )
 
     origins = cfg.cors_origins

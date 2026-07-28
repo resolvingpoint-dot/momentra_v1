@@ -37,7 +37,9 @@ Dokploy writes the Environment editor to a `.env` file next to the compose file.
 | `ALLOW_TEST_AUTH` | unset / `false` |
 | `APP_SESSION_SECRET` | ≥64 random characters |
 | `CORS_ORIGINS_STR` | explicit HTTPS origins (no `*`), e.g. `https://www.momentra.tech,https://momentra.tech` |
-| `STORAGE_PUBLIC_BASE_URL` | `https://…` object storage base (no local-upload fallback) |
+| `STORAGE_PUBLIC_BASE_URL` | `https://…/storage/v1/object/public/momentra-attachments` (or set `SUPABASE_URL` + default bucket) |
+| `SUPABASE_SECRET_KEY` | Service role / secret key — **required** to mint signed upload & gallery GET URLs for the private bucket |
+| `STORAGE_BUCKET` | Optional; default `momentra-attachments` |
 
 Also required:
 
@@ -51,6 +53,7 @@ Recommended:
 
 - `MOMENTRA_APP_INVITE_BASE_URL` — e.g. `https://www.momentra.tech/invite`
 - `MOMENTRA_RESEND_API_KEY` / `MOMENTRA_RESEND_FROM`
+- `SUPABASE_URL` + `SUPABASE_SECRET_KEY` + bucket `momentra-attachments` (signed media upload/GET)
 - `UVICORN_WORKERS` (default `1`)
 
 **OpenAPI:** In production (`DEBUG=false` / `MOMENTRA_ENV=production`) `/docs`, `/redoc`, and `/openapi.json` are disabled. Expect 404.
