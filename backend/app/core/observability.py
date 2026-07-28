@@ -119,6 +119,34 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
     response.headers["X-Duration-Ms"] = str(round(duration_ms, 2))
     if cache_hit is not None:
         response.headers["X-Cache-Hit"] = "true" if cache_hit else "false"
+
+    timing_parts = [f"total;dur={round(duration_ms, 2)}"]
+    if cache_hit is not None:
+        timing_parts.append(f'cache;desc="{"hit" if cache_hit else "miss"}"')
+    if (pb := projection_build_ms_var.get()) is not None:
+        timing_parts.append(f"projection;dur={round(pb, 2)}")
+    response.headers["Server-Timing"] = ", ".join(timing_parts)
+
     if (pv := projection_version_var.get()) is not None:
         response.headers["X-Projection-Version"] = str(pv)
+        etag = f'"proj-{pv}"'
+        response.headers["ETag"] = etag
+        inm = request.headers.get("if-none-match")
+        if (
+            inm is not None
+            and response.status_code == 200
+            and request.method in ("GET", "HEAD")
+            and inm.strip() == etag
+        ):
+            return Response(
+                status_code=304,
+                headers={
+                    "ETag": etag,
+                    "X-Request-ID": rid,
+                    "X-Duration-Ms": str(round(duration_ms, 2)),
+                    "X-Projection-Version": str(pv),
+                    "X-Cache-Hit": "true" if cache_hit else "false",
+                    "Server-Timing": response.headers["Server-Timing"],
+                },
+            )
     return response

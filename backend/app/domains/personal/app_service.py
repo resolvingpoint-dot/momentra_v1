@@ -710,6 +710,31 @@ class PersonalAppService:
             limit=limit,
         )
 
+    async def unified_activity(
+        self,
+        user_id: UUID,
+        *,
+        range: str = "all",
+        domain: str = "all",
+        kind: str = "all",
+        q: str | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> dict:
+        from app.domains.personal.activity.unified_service import (
+            UnifiedPersonalActivityService,
+        )
+
+        return await UnifiedPersonalActivityService(self.session).list_activity(
+            user_id,
+            range=range,
+            domain=domain,
+            kind=kind,
+            q=q,
+            cursor=cursor,
+            limit=limit,
+        )
+
     async def template_activity_get(
         self, user_id: UUID, moment_type: str, event_id: str
     ) -> dict:

@@ -557,6 +557,7 @@ class BusinessSetupService:
             status=moment.status,
             activated_at=activated_at,
             membership=[owner],
+            projection_status="REFRESHING",
         ).model_dump(mode="json")
 
     async def _require_owner(self, user_id: UUID, moment: MomentModel) -> None:

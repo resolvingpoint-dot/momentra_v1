@@ -161,6 +161,7 @@ class ActivateResponse(BaseModel):
     lifecycle_status: str
     orchestration_state: str | None = None
     activated_at: str
+    projection_status: str = "REFRESHING"
 
 
 # ----- shared-purchase ---------------------------------------------------- #

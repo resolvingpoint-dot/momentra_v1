@@ -1,0 +1,1 @@
+"""Personal activity domain package."""

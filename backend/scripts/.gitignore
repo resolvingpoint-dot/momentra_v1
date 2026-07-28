@@ -1,0 +1,6 @@
+node_modules/
+package-lock.json
+package.json
+dokploy-session.json
+dokploy-compose-id.txt
+_tmp_*.py

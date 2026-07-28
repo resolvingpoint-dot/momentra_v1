@@ -1,4 +1,5 @@
 # Momentra API — production image for Dokploy / Docker Compose.
+# Dokploy builds with a named target stage; we alias the single stage as `production`.
 FROM python:3.12-slim AS production
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

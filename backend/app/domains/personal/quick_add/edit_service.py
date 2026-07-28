@@ -448,6 +448,25 @@ class PersonalQuickAddEditService:
         if "reflection_note" in reflection:
             row.reflection_text = str(reflection.get("reflection_note") or "").strip() or None
 
+        # Keep timeline denorm in sync so pulse/list mood_label stays accurate.
+        timeline_result = await self.session.execute(
+            select(PersonalActivityTimeline).where(
+                PersonalActivityTimeline.quick_add_event_id
+                == event.quick_add_event_id,
+                PersonalActivityTimeline.is_voided.is_(False),
+            )
+        )
+        timeline = timeline_result.scalar_one_or_none()
+        if timeline is None:
+            return
+        labels = dict(timeline.impact_labels_json or {})
+        if reflection.get("feeling_state") is not None:
+            mood_state = str(reflection["feeling_state"])[:50]
+            labels["mood_state"] = mood_state
+            timeline.display_subtitle = mood_state.replace("_", " ").title()[:250]
+        timeline.impact_labels_json = labels
+        timeline.updated_at = _now()
+
     async def _sync_recovery(
         self, event: PersonalQuickAddEvents, recovery: dict[str, Any]
     ) -> None:

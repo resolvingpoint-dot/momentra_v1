@@ -40,12 +40,30 @@ def _templates(db: AsyncSession) -> TemplateProjectionService:
 async def get_pulse(
     moment_type_code: str | None = Query(None),
     force_refresh: bool = Query(False),
+    after_version: int | None = Query(
+        None, description="If projection version is unchanged, return 304"
+    ),
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
-) -> dict:
-    return (await _service(db).pulse(
-        user_id, force_refresh=force_refresh, moment_type_code=moment_type_code
-    )).model_dump(mode="json")
+) -> Any:
+    from starlette.responses import Response
+
+    from app.core.request_context import projection_version_var
+
+    payload = (
+        await _service(db).pulse(
+            user_id, force_refresh=force_refresh, moment_type_code=moment_type_code
+        )
+    ).model_dump(mode="json")
+    version = projection_version_var.get()
+    if (
+        after_version is not None
+        and version is not None
+        and int(after_version) == int(version)
+        and not force_refresh
+    ):
+        return Response(status_code=304)
+    return payload
 
 
 @router.get("/session")
@@ -58,10 +76,11 @@ async def get_session(
 
 @router.get("/inventory")
 async def get_inventory(
+    moment_type_code: str | None = Query(None),
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    return await _service(db).get_inventory(user_id)
+    return await _service(db).get_inventory(user_id, moment_type_code=moment_type_code)
 
 
 @router.get("/session/bootstrap")
@@ -202,6 +221,28 @@ async def template_activity_list(
         user_id,
         moment_type,
         moment_id=moment_id,
+        cursor=cursor,
+        limit=limit,
+    )
+
+
+@router.get("/activity")
+async def unified_personal_activity(
+    range: str = Query("all"),
+    domain: str = Query("all"),
+    kind: str = Query("all"),
+    q: str | None = Query(None),
+    cursor: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await _service(db).unified_activity(
+        user_id,
+        range=range,
+        domain=domain,
+        kind=kind,
+        q=q,
         cursor=cursor,
         limit=limit,
     )

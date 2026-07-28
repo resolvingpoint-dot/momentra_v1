@@ -95,6 +95,7 @@ class ActivateResponse(BaseModel):
     status: str = "ACTIVE"
     activated_at: str | None = None
     membership: list[MembershipRecord] = Field(default_factory=list)
+    projection_status: str = "REFRESHING"
 
 
 class BusinessSetupInviteDraftRequest(BaseModel):

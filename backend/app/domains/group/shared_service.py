@@ -272,6 +272,7 @@ class SharedGroupService:
             lifecycle_status="active",
             orchestration_state="ACTIVE",
             activated_at=moment.updated_at.isoformat(),
+            projection_status="REFRESHING",
         ).model_dump(mode="json")
 
     # ----- shared-experience --------------------------------------------- #
