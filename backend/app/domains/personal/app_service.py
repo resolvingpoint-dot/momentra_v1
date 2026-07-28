@@ -33,44 +33,13 @@ from app.domains.personal.catalog import (
     moment_type_name,
     normalize_moment_type_code,
 )
-from app.domains.personal.life_operations.pulse_mapper import build_life_operations_pulse
-from app.domains.personal.templates.future_building.moments_mapper import (
-    build_future_building_moments_detail,
-)
-from app.domains.personal.templates.future_building.memory_mapper import (
-    build_future_building_memory_aggregate,
-)
-from app.domains.personal.templates.future_building.projection_builder import (
-    FutureBuildingProjectionBuilder,
-)
-from app.domains.personal.templates.future_building.pulse_mapper import (
-    build_future_building_pulse,
-)
 from app.domains.personal.templates.future_building.setup_schema import (
     FUTURE_BUILDING_TEMPLATE_CONTRACT,
     upsert_future_building_profile,
 )
-from app.domains.personal.templates.lifestyle.moments_mapper import (
-    build_lifestyle_moments_detail,
-)
-from app.domains.personal.templates.lifestyle.memory_mapper import (
-    build_lifestyle_memory_aggregate,
-)
-from app.domains.personal.templates.lifestyle.projection_builder import (
-    LifestyleProjectionBuilder,
-)
 from app.domains.personal.templates.lifestyle.setup_schema import (
     LIFESTYLE_TEMPLATE_CONTRACT,
     upsert_lifestyle_profile,
-)
-from app.domains.personal.templates.relationships.moments_mapper import (
-    build_relationships_moments_detail,
-)
-from app.domains.personal.templates.relationships.memory_mapper import (
-    build_relationships_memory_aggregate,
-)
-from app.domains.personal.templates.relationships.projection_builder import (
-    RelationshipsProjectionBuilder,
 )
 from app.domains.personal.templates.relationships.setup_schema import (
     RELATIONSHIPS_TEMPLATE_CONTRACT,
@@ -89,6 +58,13 @@ _ACTIVE_STATUSES = {"ACTIVE"}
 _SWITCHER_ACTIVE_STATUSES = {"ACTIVE", "PAUSED", "COMPLETED"}
 _VISIBLE_STATUSES = {"DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "SETUP"}
 
+_DETAIL_TEMPLATES = ("FUTURE_BUILDING", "LIFESTYLE", "RELATIONSHIPS")
+_MEMORY_SECTION_LABELS = {
+    "FUTURE_BUILDING": "Future Building Memory",
+    "LIFESTYLE": "Lifestyle Memory",
+    "RELATIONSHIPS": "Relationships Memory",
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -104,6 +80,63 @@ def _to_minor(amount: str | None) -> int:
     except (InvalidOperation, ValueError):
         return 0
 
+
+def _moments_detail_from_slice(payload: dict | None) -> dict | None:
+    if not payload:
+        return None
+    proj = payload.get("moment_projection")
+    if proj is None:
+        return None
+    return {"metrics": proj}
+
+
+def _memory_block_from_slice(payload: dict | None, *, section_label: str) -> dict | None:
+    """Map Redis template memory slice → aggregate /memory block shape."""
+    if not payload:
+        return None
+    if payload.get("metrics") is not None and payload.get("section_label"):
+        return payload
+    mp = payload.get("memory_projection")
+    if mp is None:
+        return None
+    identity = mp.get("identity_snapshot") if isinstance(mp, dict) else None
+    identity = identity if isinstance(identity, dict) else {}
+    ai = mp.get("ai_interpretation") if isinstance(mp, dict) else None
+    ai = ai if isinstance(ai, dict) else {}
+    return {
+        "section_label": section_label,
+        "status_label": str(payload.get("status") or "ACTIVE"),
+        "synthesis_title": identity.get("title") or section_label,
+        "synthesis_body": identity.get("body") or "",
+        "system_state": "Active",
+        "days_analyzed": 1,
+        "confidence_percent": 70,
+        "confidence_title": "Pattern Confidence",
+        "confidence_body": ai.get("quote") or "",
+        "identity_label": identity.get("title") or "",
+        "direction_label": "",
+        "style_label": "",
+        "focus_label": "",
+        "neural_growth_title": "",
+        "neural_growth_subtitle": "",
+        "breakthrough_title": "",
+        "breakthrough_body": "",
+        "breakthrough_active": False,
+        "focus_title": "Focus",
+        "focus_percent": 70,
+        "focus_body": "",
+        "metrics": mp,
+        "identified_patterns": (
+            mp.get("behavioral_patterns")
+            or mp.get("identified_patterns")
+            or []
+            if isinstance(mp, dict)
+            else []
+        ),
+        "confidence_evolution": (
+            mp.get("confidence_evolution") or [] if isinstance(mp, dict) else []
+        ),
+    }
 
 class PersonalAppService:
     def __init__(self, session: AsyncSession) -> None:
@@ -278,12 +311,14 @@ class PersonalAppService:
     async def _maybe_refresh_orchestration(
         self, moment_id: UUID, *, force_refresh: bool
     ) -> None:
-        if not force_refresh:
-            return
-        from app.workers import procedures as procs
+        """No-op on GET paths.
 
-        await procs.refresh_personal_orchestration(self.session, moment_id)
-        await self.session.commit()
+        Mutations mark projections stale and Celery refreshes orchestration.
+        Pull-to-refresh may still purge Redis and sync-rebuild slices via
+        ProjectionReadService; it must not await sp_refresh_personal_orchestration.
+        """
+        del moment_id, force_refresh
+        return
 
     def _session_fields_from_moments(
         self,
@@ -372,6 +407,26 @@ class PersonalAppService:
             emotional_security=composed.get("emotional_security"),
         )
 
+    async def _slice_payload(
+        self,
+        user_id: UUID,
+        template: str,
+        slice_type: str,
+        *,
+        force_refresh: bool = False,
+    ) -> dict | None:
+        from app.domains.projections.projection_service import ProjectionReadService
+
+        try:
+            return await ProjectionReadService(self.session).get_slice(
+                user_id, template, slice_type, force_refresh=force_refresh
+            )
+        except Exception:
+            logger.exception(
+                "Failed to read %s slice for template=%s", slice_type, template
+            )
+            return None
+
     async def _moments_home_payload_from_moments(
         self,
         user_id: UUID,
@@ -380,7 +435,9 @@ class PersonalAppService:
         latest: dict[str, MomentModel],
         *,
         include_details: bool = True,
+        force_refresh: bool = False,
     ) -> s.PersonalMomentsHomeResponse:
+        del visible
         cards: list[s.PersonalMomentHomeCard] = []
         for mt in MOMENT_TYPES:
             linked = latest.get(mt.code)
@@ -404,26 +461,20 @@ class PersonalAppService:
 
         fb_detail = ls_detail = rs_detail = None
         if include_details:
-            fb_moment = latest.get("FUTURE_BUILDING")
-            if fb_moment and fb_moment.status in _ACTIVE_STATUSES:
-                ctx = await FutureBuildingProjectionBuilder.build(
-                    self.session, user_id, fb_moment
+            for code in _DETAIL_TEMPLATES:
+                moment = latest.get(code)
+                if not moment or moment.status not in _ACTIVE_STATUSES:
+                    continue
+                payload = await self._slice_payload(
+                    user_id, code, "moments", force_refresh=force_refresh
                 )
-                fb_detail = build_future_building_moments_detail(ctx)
-
-            ls_moment = latest.get("LIFESTYLE")
-            if ls_moment and ls_moment.status in _ACTIVE_STATUSES:
-                ls_ctx = await LifestyleProjectionBuilder.build(
-                    self.session, user_id, ls_moment
-                )
-                ls_detail = build_lifestyle_moments_detail(ls_ctx)
-
-            rs_moment = latest.get("RELATIONSHIPS")
-            if rs_moment and rs_moment.status in _ACTIVE_STATUSES:
-                rs_ctx = await RelationshipsProjectionBuilder.build(
-                    self.session, user_id, rs_moment
-                )
-                rs_detail = build_relationships_moments_detail(rs_ctx)
+                detail = _moments_detail_from_slice(payload)
+                if code == "FUTURE_BUILDING":
+                    fb_detail = detail
+                elif code == "LIFESTYLE":
+                    ls_detail = detail
+                elif code == "RELATIONSHIPS":
+                    rs_detail = detail
 
         return s.PersonalMomentsHomeResponse(
             active_moment_count=len(active),
@@ -464,7 +515,12 @@ class PersonalAppService:
             for m in active:
                 await self._maybe_refresh_orchestration(m.id, force_refresh=True)
         return await self._moments_home_payload_from_moments(
-            user_id, visible, active, latest, include_details=True
+            user_id,
+            visible,
+            active,
+            latest,
+            include_details=True,
+            force_refresh=force_refresh,
         )
 
     async def get_session(self, user_id: UUID) -> dict:
@@ -525,7 +581,7 @@ class PersonalAppService:
         force_refresh: bool = False,
         moment_type_code: str | None = None,
     ) -> dict:
-        # Always built from live moment rows; force_refresh refreshes orchestration first.
+        # Compose from Redis template memory slices (same path as /templates/.../memory).
         del moment_type_code
         moments = await self._visible_moments(user_id)
         active = [m for m in moments if m.status in _ACTIVE_STATUSES]
@@ -533,32 +589,26 @@ class PersonalAppService:
             for m in active:
                 await self._maybe_refresh_orchestration(m.id, force_refresh=True)
         latest = self._latest_by_code(active)
-        fb_block = None
-        fb_moment = latest.get("FUTURE_BUILDING")
-        if fb_moment and fb_moment.status in _ACTIVE_STATUSES:
-            ctx = await FutureBuildingProjectionBuilder.build(
-                self.session, user_id, fb_moment
+        blocks: dict[str, dict | None] = {
+            "FUTURE_BUILDING": None,
+            "LIFESTYLE": None,
+            "RELATIONSHIPS": None,
+        }
+        for code in _DETAIL_TEMPLATES:
+            moment = latest.get(code)
+            if not moment or moment.status not in _ACTIVE_STATUSES:
+                continue
+            payload = await self._slice_payload(
+                user_id, code, "memory", force_refresh=force_refresh
             )
-            fb_block = build_future_building_memory_aggregate(ctx)
-        ls_block = None
-        ls_moment = latest.get("LIFESTYLE")
-        if ls_moment and ls_moment.status in _ACTIVE_STATUSES:
-            ls_ctx = await LifestyleProjectionBuilder.build(
-                self.session, user_id, ls_moment
+            blocks[code] = _memory_block_from_slice(
+                payload, section_label=_MEMORY_SECTION_LABELS[code]
             )
-            ls_block = build_lifestyle_memory_aggregate(ls_ctx)
-        rs_block = None
-        rs_moment = latest.get("RELATIONSHIPS")
-        if rs_moment and rs_moment.status in _ACTIVE_STATUSES:
-            rs_ctx = await RelationshipsProjectionBuilder.build(
-                self.session, user_id, rs_moment
-            )
-            rs_block = build_relationships_memory_aggregate(rs_ctx)
         return s.PersonalMemoryResponse(
             is_empty=len(active) == 0,
-            future_building=fb_block,
-            lifestyle=ls_block,
-            emotional_security=rs_block,
+            future_building=blocks["FUTURE_BUILDING"],
+            lifestyle=blocks["LIFESTYLE"],
+            emotional_security=blocks["RELATIONSHIPS"],
         ).model_dump(mode="json")
 
     async def memory_summary(self, user_id: UUID) -> dict:

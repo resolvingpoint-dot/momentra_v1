@@ -70,10 +70,36 @@ class ProjectionReadService:
             set_cache_hit(True)
             set_build_coalesced(True)
             set_projection_version(envelope.version)
+            self._enqueue_stale_rebuild(user_id, cache_template, slice_type)
             return envelope.payload
 
         record_cache_miss()
         return await self._get_or_build(user_id, cache_template, slice_type, reason=reason)
+
+    @staticmethod
+    def _enqueue_stale_rebuild(user_id: UUID, template: str, slice_type: str) -> None:
+        """Serve-stale path: refresh active key via Celery (safe vs request session)."""
+        try:
+            from app.workers.tasks import projections as proj_tasks
+
+            task_by_slice = {
+                "pulse": proj_tasks.refresh_pulse_projection,
+                "moments": proj_tasks.refresh_moments_projection,
+                "memory": proj_tasks.refresh_memory_projection,
+                "life": proj_tasks.refresh_life_projection,
+            }
+            task = task_by_slice.get(slice_type)
+            if task is None:
+                return
+            task.delay(str(user_id), template, "stale_serve")
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Failed to enqueue stale rebuild user=%s template=%s slice=%s",
+                user_id,
+                template,
+                slice_type,
+                exc_info=True,
+            )
 
     async def _get_or_build(
         self,

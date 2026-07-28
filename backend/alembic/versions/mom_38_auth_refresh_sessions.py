@@ -1,17 +1,14 @@
 """Auth refresh session store for revocation and rotation.
 
 Revision ID: mom_38_auth_refresh_sessions
-Revises: mom_36_money_event_title
-
-Note: GitHub/Dokploy history is at mom_36 (mom_37 exists only in some local
-trees). Chain mom_38 directly after mom_36 for deployable upgrades.
+Revises: mom_37_projection_read_indexes
 """
 from typing import Sequence, Union
 
 from alembic import op
 
 revision: str = "mom_38_auth_refresh_sessions"
-down_revision: Union[str, Sequence[str], None] = "mom_36_money_event_title"
+down_revision: Union[str, Sequence[str], None] = "mom_37_projection_read_indexes"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -5,6 +5,11 @@ from datetime import datetime, timezone
 
 from app.domains.group import moment_store as store
 from app.domains.group.templates.shared_purchase.context import SharedPurchaseContext
+from app.core.storage import resolve_memory_image_url
+
+
+def _memory_image_url(memory: dict) -> str | None:
+    return resolve_memory_image_url(memory)
 
 
 def format_money(minor: int, currency: str = "INR") -> str:
@@ -291,7 +296,7 @@ def build_memory_hub(ctx: SharedPurchaseContext) -> dict:
         {
             "memory_id": str(m.get("id") or store.new_id()),
             "title": str(m.get("title") or "Memory"),
-            "image_url": m.get("image_url") or m.get("cover_url"),
+            "image_url": _memory_image_url(m),
         }
         for m in memories[:8]
     ]

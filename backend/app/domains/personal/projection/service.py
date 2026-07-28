@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import cache as core_cache
+from app.core.errors import SnapshotRebuildingError
 from app.core.request_context import set_build_coalesced, set_cache_hit, set_projection_build_ms
 from app.domains.moments.models import MomentModel
 from app.domains.personal.catalog import PERSONAL_CONTEXT, normalize_moment_type_code
@@ -31,6 +32,8 @@ from app.domains.personal.projection.redis_slice_cache import get_slice, set_sli
 
 _ACTIVE = {"ACTIVE"}
 _inflight: dict[UUID, asyncio.Task[CachedProjection]] = {}
+_LOCK_MISS_POLLS = 300
+_LOCK_MISS_SLEEP = 0.05
 
 
 class ProjectionService:
@@ -47,14 +50,18 @@ class ProjectionService:
                 set_build_coalesced(True)
                 return cached
             if not acquired:
-                for _ in range(300):
+                # Another worker holds the build lock. Poll cache only —
+                # never await _inflight[user_id] here: this coroutine may
+                # already *be* that inflight task (self-await RuntimeError).
+                for _ in range(_LOCK_MISS_POLLS):
                     cached = get_cached(user_id)
                     if cached is not None:
                         set_build_coalesced(True)
                         return cached
-                    if user_id in _inflight:
-                        return await _inflight[user_id]
-                    await asyncio.sleep(0.05)
+                    await asyncio.sleep(_LOCK_MISS_SLEEP)
+                raise SnapshotRebuildingError(
+                    "Personal snapshot is rebuilding; retry shortly"
+                )
             ctx = await ProjectionBuilder.build(self.session, user_id)
             version = max(1, current_version(user_id))
             cached = CachedProjection(

@@ -80,6 +80,21 @@ def _public_base() -> str:
     return (_settings.effective_storage_public_base_url or "").rstrip("/")
 
 
+def _upload_object_base() -> str:
+    """Base URL for direct client PUTs (Supabase object API, not public GET).
+
+    ``.../storage/v1/object/public/momentra`` → ``.../storage/v1/object/momentra``.
+    Non-Supabase public bases are returned unchanged.
+    """
+    base = _public_base()
+    if not base:
+        return ""
+    marker = "/storage/v1/object/public/"
+    if marker in base:
+        return base.replace(marker, "/storage/v1/object/", 1)
+    return base
+
+
 def _extension_for(content_type: str | None) -> str:
     if not content_type:
         return ""
@@ -187,23 +202,25 @@ class SupabaseStorageBackend(StorageBackend):
     async def signed_url(
         self, path: str, *, expires_in: int = 3600, method: str = "PUT"
     ) -> str:
-        """Emit a time-limited-style URL for direct client upload/download.
+        """Emit a URL for direct client upload/download.
 
-        Full Supabase signed-URL SDK wiring can replace this later; today we
-        require an https public base and append a short expiry query hint so
-        clients never fall back to open ``/local-uploads`` in production.
+        PUT uses the Supabase object API path (not ``/object/public/``).
+        GET continues to use the public read base.
         """
-        base = _public_base()
         key = path.lstrip("/")
+        method_u = (method or "GET").upper()
+        if method_u == "PUT":
+            base = _upload_object_base() or _public_base()
+        else:
+            base = _public_base()
         if not base:
             if settings.is_production or not settings.debug:
                 raise RuntimeError(
                     "STORAGE_PUBLIC_BASE_URL is required for signed uploads"
                 )
-            return f"/local-uploads/{key}?method={method}&expires_in={expires_in}"
-        # Prefer explicit signed-style URL; bucket policies should enforce expiry.
+            return f"/local-uploads/{key}?method={method_u}&expires_in={expires_in}"
         sep = "&" if "?" in base else "?"
-        return f"{base}/{key}{sep}method={method}&expires_in={expires_in}"
+        return f"{base}/{key}{sep}method={method_u}&expires_in={expires_in}"
 
     async def move(self, src: str, dest: str) -> None:
         await self.copy(src, dest)
@@ -228,29 +245,118 @@ def get_storage() -> StorageBackend:
 
 
 def build_upload_url(storage_path: str) -> str:
-    """Signed PUT URL helper. Production requires STORAGE_PUBLIC_BASE_URL."""
-    base = _public_base()
+    """Direct-client PUT URL. Production requires STORAGE_PUBLIC_BASE_URL.
+
+    For Supabase, PUTs target ``/storage/v1/object/{bucket}/...`` (not the
+    public GET path). Query hints are informational; bucket policies enforce access.
+    """
+    key = storage_path.lstrip("/")
+    base = _upload_object_base()
     if base:
         if not base.startswith("https://") and settings.is_production:
             raise RuntimeError(
                 "STORAGE_PUBLIC_BASE_URL must be https:// in production"
             )
-        # Expiry query hint; bucket policies should enforce real TTL.
-        sep = "&" if "?" in f"{base}/{storage_path.lstrip('/')}" else "?"
-        return (
-            f"{base}/{storage_path.lstrip('/')}"
-            f"{sep}method=PUT&expires_in=3600"
-        )
+        sep = "&" if "?" in f"{base}/{key}" else "?"
+        return f"{base}/{key}{sep}method=PUT&expires_in=3600"
     if settings.is_production or not settings.debug:
         raise RuntimeError(
             "STORAGE_PUBLIC_BASE_URL is required; local-uploads are disabled outside DEBUG"
         )
-    return f"/local-uploads/{storage_path.lstrip('/')}"
+    return f"/local-uploads/{key}"
 
 
 def public_url_for(storage_path: str) -> str:
     """Publicly readable URL for a stored object (persisted on the entity)."""
     return get_storage().public_url(storage_path)
+
+
+def verify_stored_object(storage_path: str) -> None:
+    """Raise ``ValueError`` when the uploaded object is missing.
+
+    Checks the local stub filesystem when no remote base is configured;
+    otherwise HEADs (then ranged-GETs) the public read URL.
+    """
+    from pathlib import Path
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    key = (storage_path or "").replace("\\", "/").lstrip("/")
+    if not key or ".." in key.split("/"):
+        raise ValueError("Invalid storage path")
+
+    base = _public_base()
+    if not base:
+        root = Path(__file__).resolve().parents[2] / ".local-uploads"
+        if not (root / key).is_file():
+            raise ValueError("Upload not found; retry the upload")
+        return
+
+    url = public_url_for(key)
+
+    def _ok(req: Request) -> bool:
+        try:
+            with urlopen(req, timeout=12) as resp:  # noqa: S310 — URL from our storage config
+                code = getattr(resp, "status", None) or resp.getcode()
+                return 200 <= int(code) < 300
+        except HTTPError as exc:
+            if exc.code == 405:
+                return False
+            if exc.code == 404:
+                raise ValueError("Upload not found; retry the upload") from exc
+            raise ValueError(f"Could not verify upload ({exc.code})") from exc
+        except URLError as exc:
+            raise ValueError("Could not verify upload") from exc
+
+    if _ok(Request(url, method="HEAD")):
+        return
+    # Some CDNs reject HEAD — probe with a tiny ranged GET.
+    get_req = Request(url, method="GET")
+    get_req.add_header("Range", "bytes=0-0")
+    if not _ok(get_req):
+        raise ValueError("Upload not found; retry the upload")
+
+
+def resolve_media_display_url(value: str | None) -> str | None:
+    """Turn a storage key, absolute URL, or relative stub into a displayable URL.
+
+    - Absolute ``http(s)`` URLs are returned unchanged.
+    - Paths that already start with ``/`` (e.g. ``/local-uploads/...``) are
+      returned as-is for clients to join with the API origin.
+    - Bare storage keys go through ``public_url_for``.
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    if s.startswith(("http://", "https://")):
+        return s
+    if s.startswith("/"):
+        return s
+    return public_url_for(s)
+
+
+def resolve_memory_image_url(memory: dict) -> str | None:
+    """Resolve a gallery/display image URL from a memory store payload."""
+    for key in ("image_url", "cover_url", "cover_image_url", "photo_url", "url"):
+        val = memory.get(key)
+        if isinstance(val, str) and val.strip():
+            resolved = resolve_media_display_url(val)
+            if resolved:
+                return resolved
+    paths = memory.get("media_storage_paths") or memory.get("media_urls") or []
+    if isinstance(paths, str):
+        paths = [paths]
+    if not isinstance(paths, list):
+        return None
+    for path in paths:
+        if not path:
+            continue
+        resolved = resolve_media_display_url(str(path))
+        if resolved:
+            return resolved
+    return None
 
 
 def require_remote_storage_configured() -> None:

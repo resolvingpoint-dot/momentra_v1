@@ -327,27 +327,9 @@ def focus_items(ctx: SharedExperienceContext) -> list[dict]:
 
 def _memory_image_url(memory: dict) -> str | None:
     """Resolve a displayable image URL from store fields when present."""
-    for key in ("image_url", "cover_url", "cover_image_url", "photo_url", "url"):
-        val = memory.get(key)
-        if isinstance(val, str) and val.strip():
-            return val.strip()
-    paths = memory.get("media_storage_paths") or memory.get("media_urls") or []
-    if isinstance(paths, str):
-        paths = [paths]
-    if not isinstance(paths, list):
-        return None
-    for path in paths:
-        if not path:
-            continue
-        s = str(path).strip()
-        if not s:
-            continue
-        if s.startswith(("http://", "https://", "/")):
-            return s
-        from app.core.storage import public_url_for
+    from app.core.storage import resolve_memory_image_url
 
-        return public_url_for(s)
-    return None
+    return resolve_memory_image_url(memory)
 
 
 def build_memory_hub(ctx: SharedExperienceContext) -> dict:

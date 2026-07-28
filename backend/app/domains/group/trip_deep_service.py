@@ -1065,12 +1065,13 @@ class TripDeepService:
         ).model_dump(mode="json")
 
     async def attachment_confirm(self, user_id: UUID, moment_id: UUID, body: dict) -> dict:
-        from app.core.storage import assert_storage_path_under
+        from app.core.storage import assert_storage_path_under, verify_stored_object
 
         m = await self._require(user_id, moment_id)
         raw = str(body.get("storage_path") or "")
         try:
             path = assert_storage_path_under(raw, f"trip-attachments/{m.id}")
+            verify_stored_object(path)
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
