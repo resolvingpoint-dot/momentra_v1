@@ -1,0 +1,47 @@
+query PersonalActivity($range: String = "all") {
+  activity(scope: PERSONAL, range: $range, first: 50) {
+    __typename
+    ... on PersonalActivityFeed {
+      snapshot {
+        headline
+        todayActivityCount
+        todayAmountMinor
+        todayMoodLabel
+        todayDomainLabels
+      }
+      insights {
+        id
+        kind
+        title
+        value
+      }
+      items
+      nextCursor
+    }
+  }
+}
+
+query GroupActivity($momentId: ID!) {
+  activity(scope: GROUP, momentId: $momentId) {
+    __typename
+    ... on GroupActivityFeed {
+      momentId
+      total
+      items
+      summary
+    }
+  }
+}
+
+query BusinessActivity($momentId: ID!, $page: Int = 1) {
+  activity(scope: BUSINESS, momentId: $momentId, page: $page, first: 20) {
+    __typename
+    ... on BusinessActivityFeed {
+      momentId
+      total
+      page
+      pageSize
+      items
+    }
+  }
+}

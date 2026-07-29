@@ -99,7 +99,31 @@ class BusinessPulseDTO:
     avatar_image_url: str | None = None
 
 
+@dataclass
+class ActivePulseDTO:
+    """Moment-scoped active Pulse — typed KPI shell + full service payload."""
+
+    scope: PulseScope
+    moment_id: UUID
+    moment_type: str
+    moment_name: str
+    moment_profile: str = ""
+    health_score: float = 0.0
+    health_status: str = ""
+    people_score: float = 0.0
+    money_score: float = 0.0
+    activity_score: float = 0.0
+    completion_percentage: float = 0.0
+    participation_percentage: float = 0.0
+    funding_percentage: float = 0.0
+    active_members: int = 0
+    active_tasks: int = 0
+    open_items: int = 0
+    payload: dict[str, Any] = field(default_factory=dict)
+
+
 PulseLandingDTO = PersonalPulseDTO | GroupPulseDTO | BusinessPulseDTO
+PulseDTO = PulseLandingDTO | ActivePulseDTO
 
 
 def _card_from_dict(raw: dict[str, Any]) -> PulseTypeCardDTO:
@@ -215,6 +239,49 @@ def _business_from_dict(data: dict[str, Any]) -> BusinessPulseDTO:
     )
 
 
+def _active_from_dict(scope: PulseScope, data: dict[str, Any], moment_id: UUID) -> ActivePulseDTO:
+    nested = data.get("pulse_data") if isinstance(data.get("pulse_data"), dict) else {}
+    shell_src = {**nested, **data}
+
+    def _f(key: str, default: float = 0.0) -> float:
+        try:
+            return float(shell_src.get(key) if shell_src.get(key) is not None else default)
+        except (TypeError, ValueError):
+            return default
+
+    def _i(key: str, default: int = 0) -> int:
+        try:
+            return int(shell_src.get(key) if shell_src.get(key) is not None else default)
+        except (TypeError, ValueError):
+            return default
+
+    mid = str(shell_src.get("moment_id") or moment_id)
+    return ActivePulseDTO(
+        scope=scope,
+        moment_id=UUID(mid) if mid else moment_id,
+        moment_type=str(shell_src.get("moment_type") or ""),
+        moment_name=str(
+            shell_src.get("moment_name")
+            or shell_src.get("trip_name")
+            or shell_src.get("title")
+            or ""
+        ),
+        moment_profile=str(shell_src.get("moment_profile") or ""),
+        health_score=_f("health_score"),
+        health_status=str(shell_src.get("health_status") or ""),
+        people_score=_f("people_score"),
+        money_score=_f("money_score"),
+        activity_score=_f("activity_score"),
+        completion_percentage=_f("completion_percentage"),
+        participation_percentage=_f("participation_percentage"),
+        funding_percentage=_f("funding_percentage"),
+        active_members=_i("active_members"),
+        active_tasks=_i("active_tasks"),
+        open_items=_i("open_items"),
+        payload=data,
+    )
+
+
 async def get_pulse_landing(
     session: AsyncSession,
     principal: Principal,
@@ -223,14 +290,24 @@ async def get_pulse_landing(
     force_refresh: bool = False,
     moment_type_code: str | None = None,
     workspace_id: UUID | None = None,
-) -> PulseLandingDTO:
-    """Return the Pulse tab landing for PERSONAL / GROUP / BUSINESS.
+    moment_id: UUID | None = None,
+) -> PulseDTO:
+    """Return Pulse landing or moment-scoped active Pulse.
 
-    Matches REST inventory Pulse endpoints. Authenticated principal only —
-    no moment-scoped AuthZ (that belongs to active pulse in a later vertical).
+    Landings: authenticated principal only.
+    Active (moment_id set): central AuthZ ``group.moment.view`` / ``business.moment.view``.
     """
     scope_val = PulseScope(scope) if not isinstance(scope, PulseScope) else scope
     user_id = principal.user_id
+
+    if moment_id is not None:
+        return await get_active_pulse(
+            session,
+            principal,
+            scope_val,
+            moment_id,
+            force_refresh=force_refresh,
+        )
 
     if scope_val is PulseScope.PERSONAL:
         from app.domains.personal.app_service import PersonalAppService
@@ -255,5 +332,61 @@ async def get_pulse_landing(
             user_id, workspace_id=workspace_id
         )
         return _business_from_dict(payload)
+
+    raise ValueError(f"Unsupported pulse scope: {scope_val}")
+
+
+async def get_active_pulse(
+    session: AsyncSession,
+    principal: Principal,
+    scope: PulseScope | str,
+    moment_id: UUID,
+    *,
+    force_refresh: bool = False,
+) -> ActivePulseDTO:
+    from app.authorization import ResourceRef, require
+    from app.authorization.require import BUSINESS_MOMENT_VIEW, GROUP_MOMENT_VIEW
+    from app.core.errors import NotFoundError
+
+    scope_val = PulseScope(scope) if not isinstance(scope, PulseScope) else scope
+    user_id = principal.user_id
+
+    if scope_val is PulseScope.PERSONAL:
+        raise NotFoundError(
+            "Active personal Pulse by momentId is not available on this query",
+            code="not_found",
+        )
+
+    if scope_val is PulseScope.GROUP:
+        await require(
+            session,
+            principal,
+            GROUP_MOMENT_VIEW,
+            ResourceRef(kind="group_moment", id=moment_id),
+        )
+        from app.domains.group.app_service import GroupAppService
+
+        data = await GroupAppService(session).active_pulse(
+            user_id, moment_id, force_refresh=force_refresh
+        )
+        if not isinstance(data, dict):
+            data = {}
+        return _active_from_dict(PulseScope.GROUP, data, moment_id)
+
+    if scope_val is PulseScope.BUSINESS:
+        await require(
+            session,
+            principal,
+            BUSINESS_MOMENT_VIEW,
+            ResourceRef(kind="business_moment", id=moment_id),
+        )
+        from app.domains.business.active_service import BusinessActiveService
+
+        data = await BusinessActiveService(session).get_pulse(
+            user_id, moment_id, force_refresh=force_refresh
+        )
+        if not isinstance(data, dict):
+            data = {}
+        return _active_from_dict(PulseScope.BUSINESS, data, moment_id)
 
     raise ValueError(f"Unsupported pulse scope: {scope_val}")

@@ -1,4 +1,4 @@
-"""pulse root query — landing + moment-scoped active Pulse."""
+"""activity root query — Unified personal + moment-scoped GROUP/BUSINESS feeds."""
 from __future__ import annotations
 
 from enum import Enum
@@ -9,61 +9,63 @@ from strawberry.types import Info
 
 from app.api.graphql.context import GraphQLContext, GraphQLUnauthenticated
 from app.api.graphql.errors import graphql_error_from_exception
-from app.api.graphql.types.pulse import PulseResult, pulse_from_dto
-from app.application.queries.pulse import PulseScope, get_pulse_landing
+from app.api.graphql.types.activity import ActivityResult, activity_from_dto
+from app.application.queries.activity import ActivityScope, get_activity
 from app.core.errors import AppError, NotFoundError
 
 
 @strawberry.enum
-class PulseScopeGQL(Enum):
+class ActivityScopeGQL(Enum):
     PERSONAL = "PERSONAL"
     GROUP = "GROUP"
     BUSINESS = "BUSINESS"
 
 
 @strawberry.type
-class PulseQuery:
+class ActivityQuery:
     @strawberry.field
-    async def pulse(
+    async def activity(
         self,
         info: Info,
-        scope: PulseScopeGQL,
-        force_refresh: bool = False,
-        moment_type: str | None = None,
-        workspace_id: strawberry.ID | None = None,
+        scope: ActivityScopeGQL,
         moment_id: strawberry.ID | None = None,
-    ) -> PulseResult | None:
-        """Pulse landing or active moment Pulse for the authenticated principal.
+        range: str = "all",
+        domain: str = "all",
+        kind: str = "all",
+        q: str | None = None,
+        first: int = 50,
+        after: str | None = None,
+        page: int = 1,
+        status: str = "active",
+    ) -> ActivityResult | None:
+        """Unified Activity (PERSONAL) or moment-scoped GROUP/BUSINESS activity.
 
-        Without ``momentId``: tab landings (PERSONAL / GROUP / BUSINESS).
-        With ``momentId``: active Group/Business Pulse (AuthZ via central require).
-        Unauthorized / missing moments → null (IDOR-safe), matching ``groupMoment``.
+        GROUP/BUSINESS require ``momentId``. Missing/unauthorized → null (IDOR-safe).
         """
         ctx: GraphQLContext = info.context
         try:
             principal = ctx.require_principal()
-            ws: UUID | None = None
-            if workspace_id:
-                try:
-                    ws = UUID(str(workspace_id))
-                except ValueError as exc:
-                    raise NotFoundError("Workspace not found", code="not_found") from exc
             mid: UUID | None = None
             if moment_id:
                 try:
                     mid = UUID(str(moment_id))
                 except ValueError as exc:
                     raise NotFoundError("Moment not found", code="not_found") from exc
-            dto = await get_pulse_landing(
+            dto = await get_activity(
                 ctx.db,
                 principal,
-                PulseScope(scope.value),
-                force_refresh=force_refresh,
-                moment_type_code=moment_type,
-                workspace_id=ws,
+                ActivityScope(scope.value),
                 moment_id=mid,
+                range=range,
+                domain=domain,
+                kind=kind,
+                q=q,
+                after=after,
+                first=first,
+                page=page,
+                status_filter=status,
             )
-            return pulse_from_dto(dto)
+            return activity_from_dto(dto)
         except GraphQLUnauthenticated as exc:
             raise graphql_error_from_exception(exc) from exc
         except NotFoundError:

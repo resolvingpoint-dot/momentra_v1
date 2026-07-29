@@ -1,3 +1,46 @@
+type ActivityInsight {
+  id: String!
+  kind: String!
+  title: String!
+  value: String
+}
+
+union ActivityResult = PersonalActivityFeed | GroupActivityFeed | BusinessActivityFeed
+
+enum ActivityScopeGQL {
+  PERSONAL
+  GROUP
+  BUSINESS
+}
+
+type BusinessActivePulse {
+  momentId: ID!
+  momentType: String!
+  momentName: String!
+  momentProfile: String!
+  healthScore: Float!
+  healthStatus: String!
+  peopleScore: Float!
+  moneyScore: Float!
+  activityScore: Float!
+  completionPercentage: Float!
+  participationPercentage: Float!
+  fundingPercentage: Float!
+  activeMembers: Int!
+  activeTasks: Int!
+  openItems: Int!
+  payload: JSON!
+}
+
+type BusinessActivityFeed {
+  momentId: ID!
+  total: Int!
+  page: Int
+  pageSize: Int
+  items: JSON!
+  payload: JSON!
+}
+
 type BusinessPulse {
   isEmpty: Boolean!
   activeMomentCount: Int!
@@ -18,6 +61,25 @@ type BusinessPulse {
   avatarImageUrl: String
 }
 
+type GroupActivePulse {
+  momentId: ID!
+  momentType: String!
+  momentName: String!
+  momentProfile: String!
+  healthScore: Float!
+  healthStatus: String!
+  peopleScore: Float!
+  moneyScore: Float!
+  activityScore: Float!
+  completionPercentage: Float!
+  participationPercentage: Float!
+  fundingPercentage: Float!
+  activeMembers: Int!
+  activeTasks: Int!
+  openItems: Int!
+  payload: JSON!
+}
+
 type GroupActivity {
   id: ID!
   title: String!
@@ -33,6 +95,14 @@ type GroupActivityConnection {
 type GroupActivityEdge {
   cursor: String!
   node: GroupActivity!
+}
+
+type GroupActivityFeed {
+  momentId: ID!
+  total: Int!
+  items: JSON!
+  summary: JSON
+  payload: JSON!
 }
 
 type GroupExpense {
@@ -107,6 +177,22 @@ type PageInfo {
   endCursor: String
 }
 
+type PersonalActivityFeed {
+  snapshot: PersonalActivitySnapshot!
+  insights: [ActivityInsight!]!
+  items: JSON!
+  nextCursor: String
+}
+
+type PersonalActivitySnapshot {
+  headline: String
+  todayActivityCount: Int!
+  todayAmountMinor: Int!
+  todayMoodLabel: String
+  todayDomainLabels: [String!]
+  raw: JSON
+}
+
 type PersonalPulse {
   overallRhythmState: String!
   activeMomentCount: Int!
@@ -133,7 +219,7 @@ type PulseEmptyItem {
   displayOrder: Int!
 }
 
-union PulseResult = PersonalPulse | GroupPulse | BusinessPulse
+union PulseResult = PersonalPulse | GroupPulse | BusinessPulse | GroupActivePulse | BusinessActivePulse
 
 enum PulseScopeGQL {
   PERSONAL
@@ -159,6 +245,7 @@ type PulseTypeCard {
 
 type Query {
   groupMoment(id: ID!): GroupMoment
-  pulse(scope: PulseScopeGQL!, forceRefresh: Boolean! = false, momentType: String = null, workspaceId: ID = null): PulseResult!
+  pulse(scope: PulseScopeGQL!, forceRefresh: Boolean! = false, momentType: String = null, workspaceId: ID = null, momentId: ID = null): PulseResult
+  activity(scope: ActivityScopeGQL!, momentId: ID = null, range: String! = "all", domain: String! = "all", kind: String! = "all", q: String = null, first: Int! = 50, after: String = null, page: Int! = 1, status: String! = "active"): ActivityResult
   health: String!
 }

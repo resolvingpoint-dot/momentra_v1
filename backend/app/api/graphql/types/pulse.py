@@ -7,10 +7,12 @@ import strawberry
 from strawberry.scalars import JSON
 
 from app.application.queries.pulse import (
+    ActivePulseDTO,
     BusinessPulseDTO,
     GroupPulseDTO,
     PersonalPulseDTO,
     PulseEmptyItemDTO,
+    PulseScope,
     PulseTypeCardDTO,
 )
 
@@ -186,17 +188,105 @@ class BusinessPulse:
         )
 
 
+@strawberry.type
+class GroupActivePulse:
+    moment_id: strawberry.ID
+    moment_type: str
+    moment_name: str
+    moment_profile: str
+    health_score: float
+    health_status: str
+    people_score: float
+    money_score: float
+    activity_score: float
+    completion_percentage: float
+    participation_percentage: float
+    funding_percentage: float
+    active_members: int
+    active_tasks: int
+    open_items: int
+    payload: JSON
+
+    @classmethod
+    def from_dto(cls, dto: ActivePulseDTO) -> GroupActivePulse:
+        return cls(
+            moment_id=strawberry.ID(str(dto.moment_id)),
+            moment_type=dto.moment_type,
+            moment_name=dto.moment_name,
+            moment_profile=dto.moment_profile,
+            health_score=dto.health_score,
+            health_status=dto.health_status,
+            people_score=dto.people_score,
+            money_score=dto.money_score,
+            activity_score=dto.activity_score,
+            completion_percentage=dto.completion_percentage,
+            participation_percentage=dto.participation_percentage,
+            funding_percentage=dto.funding_percentage,
+            active_members=dto.active_members,
+            active_tasks=dto.active_tasks,
+            open_items=dto.open_items,
+            payload=dto.payload,
+        )
+
+
+@strawberry.type
+class BusinessActivePulse:
+    moment_id: strawberry.ID
+    moment_type: str
+    moment_name: str
+    moment_profile: str
+    health_score: float
+    health_status: str
+    people_score: float
+    money_score: float
+    activity_score: float
+    completion_percentage: float
+    participation_percentage: float
+    funding_percentage: float
+    active_members: int
+    active_tasks: int
+    open_items: int
+    payload: JSON
+
+    @classmethod
+    def from_dto(cls, dto: ActivePulseDTO) -> BusinessActivePulse:
+        return cls(
+            moment_id=strawberry.ID(str(dto.moment_id)),
+            moment_type=dto.moment_type,
+            moment_name=dto.moment_name,
+            moment_profile=dto.moment_profile,
+            health_score=dto.health_score,
+            health_status=dto.health_status,
+            people_score=dto.people_score,
+            money_score=dto.money_score,
+            activity_score=dto.activity_score,
+            completion_percentage=dto.completion_percentage,
+            participation_percentage=dto.participation_percentage,
+            funding_percentage=dto.funding_percentage,
+            active_members=dto.active_members,
+            active_tasks=dto.active_tasks,
+            open_items=dto.open_items,
+            payload=dto.payload,
+        )
+
+
 PulseResult = Annotated[
-    PersonalPulse | GroupPulse | BusinessPulse,
+    PersonalPulse | GroupPulse | BusinessPulse | GroupActivePulse | BusinessActivePulse,
     strawberry.union("PulseResult"),
 ]
 
 
-def pulse_from_dto(dto: Any) -> PersonalPulse | GroupPulse | BusinessPulse:
+def pulse_from_dto(
+    dto: Any,
+) -> PersonalPulse | GroupPulse | BusinessPulse | GroupActivePulse | BusinessActivePulse:
     if isinstance(dto, PersonalPulseDTO):
         return PersonalPulse.from_dto(dto)
     if isinstance(dto, GroupPulseDTO):
         return GroupPulse.from_dto(dto)
     if isinstance(dto, BusinessPulseDTO):
         return BusinessPulse.from_dto(dto)
+    if isinstance(dto, ActivePulseDTO):
+        if dto.scope is PulseScope.BUSINESS:
+            return BusinessActivePulse.from_dto(dto)
+        return GroupActivePulse.from_dto(dto)
     raise TypeError(f"Unsupported pulse DTO: {type(dto)!r}")

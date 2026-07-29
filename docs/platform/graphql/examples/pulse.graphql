@@ -62,3 +62,33 @@ query BusinessPulse($workspaceId: ID) {
     }
   }
 }
+
+query GroupActivePulse($momentId: ID!) {
+  pulse(scope: GROUP, momentId: $momentId) {
+    __typename
+    ... on GroupActivePulse {
+      momentId
+      momentType
+      momentName
+      healthScore
+      healthStatus
+      peopleScore
+      moneyScore
+      activityScore
+      payload
+    }
+  }
+}
+
+query BusinessActivePulse($momentId: ID!) {
+  pulse(scope: BUSINESS, momentId: $momentId) {
+    __typename
+    ... on BusinessActivePulse {
+      momentId
+      momentType
+      momentName
+      healthScore
+      payload
+    }
+  }
+}

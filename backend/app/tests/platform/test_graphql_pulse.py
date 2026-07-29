@@ -196,3 +196,107 @@ def test_pulse_business_landing(
     pulse = body["data"]["pulse"]
     assert pulse["__typename"] == "BusinessPulse"
     assert pulse["heroTitle"] == "Run with clarity"
+
+
+@patch("app.api.v1.auth.verify_firebase_token")
+def test_pulse_group_active(
+    mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
+    from uuid import uuid4
+
+    from app.application.queries.pulse import ActivePulseDTO, PulseScope
+
+    mock_verify.return_value = {
+        "uid": sample_user.firebase_uid,
+        "email": sample_user.email,
+        "name": sample_user.display_name,
+    }
+    mock_db.add(sample_user)
+    exchange = client.post(
+        "/api/v1/auth/firebase/exchange",
+        json={"id_token": "firebase-id-token"},
+    )
+    access = exchange.json()["tokens"]["access_token"]
+    mid = uuid4()
+    dto = ActivePulseDTO(
+        scope=PulseScope.GROUP,
+        moment_id=mid,
+        moment_type="SHARED_EXPERIENCE",
+        moment_name="Goa Trip",
+        health_score=72.5,
+        health_status="On track",
+        payload={"moment_id": str(mid), "trip_name": "Goa Trip", "stats": {"n": 1}},
+    )
+    with patch(
+        "app.api.graphql.queries.pulse.get_pulse_landing",
+        new_callable=AsyncMock,
+        return_value=dto,
+    ):
+        resp = _gql(
+            client,
+            """
+            query ($id: ID!) {
+              pulse(scope: GROUP, momentId: $id) {
+                __typename
+                ... on GroupActivePulse {
+                  momentId
+                  momentName
+                  healthScore
+                  healthStatus
+                  payload
+                }
+              }
+            }
+            """,
+            variables={"id": str(mid)},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert not body.get("errors"), body
+    pulse = body["data"]["pulse"]
+    assert pulse["__typename"] == "GroupActivePulse"
+    assert pulse["momentName"] == "Goa Trip"
+    assert pulse["healthScore"] == 72.5
+    assert pulse["payload"]["stats"]["n"] == 1
+
+
+@patch("app.api.v1.auth.verify_firebase_token")
+def test_pulse_active_not_found_returns_null(
+    mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
+    from uuid import uuid4
+
+    from app.core.errors import NotFoundError
+
+    mock_verify.return_value = {
+        "uid": sample_user.firebase_uid,
+        "email": sample_user.email,
+        "name": sample_user.display_name,
+    }
+    mock_db.add(sample_user)
+    exchange = client.post(
+        "/api/v1/auth/firebase/exchange",
+        json={"id_token": "firebase-id-token"},
+    )
+    access = exchange.json()["tokens"]["access_token"]
+
+    with patch(
+        "app.api.graphql.queries.pulse.get_pulse_landing",
+        new_callable=AsyncMock,
+        side_effect=NotFoundError("Moment not found", code="not_found"),
+    ):
+        resp = _gql(
+            client,
+            """
+            query ($id: ID!) {
+              pulse(scope: GROUP, momentId: $id) { __typename }
+            }
+            """,
+            variables={"id": str(uuid4())},
+            headers={"Authorization": f"Bearer {access}"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert not body.get("errors"), body
+    assert body["data"]["pulse"] is None
