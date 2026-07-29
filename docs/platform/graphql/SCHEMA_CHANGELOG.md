@@ -1,5 +1,11 @@
 # GraphQL Schema Changelog
 
+## 2026-07-29 — `f5c460508117`
+
+- checksum: `f5c4605081178ad7a11a3e24366022e4ce95503b382fdb027ff5826678d47f72`
+- previous: `a080102cf8c2269654fa870efcabb2927a0382489bb6b64c8fcef1242fbc5076`
+- notes: Business Home — `businessHome` (REST `/business/moments/home`)
+
 ## 2026-07-29 — `a080102cf8c2`
 
 - checksum: `a080102cf8c2269654fa870efcabb2927a0382489bb6b64c8fcef1242fbc5076`

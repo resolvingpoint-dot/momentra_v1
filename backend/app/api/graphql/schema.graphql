@@ -41,6 +41,23 @@ type BusinessActivityFeed {
   payload: JSON!
 }
 
+type BusinessHome {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  heroTitle: String!
+  heroSubtitle: String!
+  ctaLabel: String!
+  avatarImageUrl: String
+  avatarEditable: Boolean!
+  infoCardTitle: String
+  infoCardFootnote: String
+  cards: [PulseTypeCard!]!
+  infoCardItems: JSON!
+  avatarRequirements: JSON
+  coverRequirements: JSON
+  footerBand: JSON
+}
+
 type BusinessPulse {
   isEmpty: Boolean!
   activeMomentCount: Int!
@@ -297,5 +314,6 @@ type Query {
   activity(scope: ActivityScopeGQL!, momentId: ID = null, range: String! = "all", domain: String! = "all", kind: String! = "all", q: String = null, first: Int! = 50, after: String = null, page: Int! = 1, status: String! = "active"): ActivityResult
   personalHome(forceRefresh: Boolean! = false, momentType: String = null): PersonalHome!
   groupHome: GroupHome!
+  businessHome(workspaceId: ID = null): BusinessHome!
   health: String!
 }

@@ -1,0 +1,20 @@
+query BusinessHome($workspaceId: ID) {
+  businessHome(workspaceId: $workspaceId) {
+    isEmpty
+    activeMomentCount
+    heroTitle
+    heroSubtitle
+    ctaLabel
+    avatarImageUrl
+    cards {
+      momentTypeCode
+      momentTypeName
+      linkedMomentId
+      actionLabel
+    }
+    infoCardTitle
+    infoCardItems
+    avatarRequirements
+    coverRequirements
+  }
+}

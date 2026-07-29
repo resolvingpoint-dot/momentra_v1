@@ -7,6 +7,7 @@ from strawberry.fastapi import GraphQLRouter
 from app.api.graphql.context import get_graphql_context
 from app.api.graphql.extensions import build_extensions
 from app.api.graphql.queries.activity import ActivityQuery
+from app.api.graphql.queries.business_home import BusinessHomeQuery
 from app.api.graphql.queries.group_home import GroupHomeQuery
 from app.api.graphql.queries.group_moment import GroupMomentQuery
 from app.api.graphql.queries.personal_home import PersonalHomeQuery
@@ -16,7 +17,12 @@ from app.core.config import settings
 
 @strawberry.type
 class Query(
-    GroupMomentQuery, PulseQuery, ActivityQuery, PersonalHomeQuery, GroupHomeQuery
+    GroupMomentQuery,
+    PulseQuery,
+    ActivityQuery,
+    PersonalHomeQuery,
+    GroupHomeQuery,
+    BusinessHomeQuery,
 ):
     """Root query type. Mutations are intentionally omitted (REST = commands)."""
 
