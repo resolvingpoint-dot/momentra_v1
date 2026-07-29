@@ -213,6 +213,8 @@ class GroupReadService:
             metric_tiles=list(raw.get("metric_tiles") or []),
             recent_activity=list(raw.get("recent_activity") or []),
             health_trend=raw.get("health_trend") or {"label": "", "value": 0, "direction": "up"},
+            settlement_widget=raw.get("settlement_widget"),
+            settlement_preview=raw.get("settlement_preview"),
             stats=r.PurchasePulseStats(**known_stats),
         ).model_dump(mode="json")
 
@@ -505,6 +507,8 @@ class GroupReadService:
             recent_activity=list(raw.get("recent_activity") or []),
             health_trend=raw.get("health_trend") or {"label": "", "value": 0, "direction": "up"},
             operations_progress=raw.get("operations_progress"),
+            settlement_widget=raw.get("settlement_widget"),
+            settlement_preview=raw.get("settlement_preview"),
             stats=r.LivingPulseStats(**known_stats),
         ).model_dump(mode="json")
 

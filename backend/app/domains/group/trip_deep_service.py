@@ -94,33 +94,45 @@ class TripDeepService:
     # ----- settlements --------------------------------------------------- #
     async def settlements(self, user_id: UUID, moment_id: UUID) -> dict:
         m = await self._require(user_id, moment_id)
-        svc = SettlementService(self.session)
-        preview = svc.preview_for_moment(m)
-        life = cheap_life_preview(m) or {}
-        pending = [s.model_dump(mode="json") for s in preview.suggestions]
+        from app.domains.group.settlements.trip_payload import build_trip_settlement_payload
+
+        payload = build_trip_settlement_payload(m)
         members = store.guest_summaries(m)
-        status_line = (
-            "All balances are settled."
-            if not pending
-            else f"{len(pending)} settlement suggestion{'s' if len(pending) != 1 else ''} ready."
-        )
-        return d.TripSettlementContext(
-            moment_id=str(m.id),
-            trip_name=self._name(m),
-            status_line=status_line,
-            balance_sync_percent=100.0 if not pending else max(0.0, 100.0 - len(pending) * 15.0),
-            balance_insight=str(
-                life.get("balance_insight")
-                or preview.balance_insight
-                or "Nobody owes anything yet — log an expense to get started."
-            ),
-            harmony_label=str(life.get("harmony_label") or preview.harmony_label or "In harmony"),
-            pending_balances=pending,
-            participants=members,
-            guests=members,
-        ).model_dump(mode="json")
+        payload["participants"] = members
+        payload["guests"] = members
+        return d.TripSettlementContext(**{
+            k: payload[k]
+            for k in d.TripSettlementContext.model_fields
+            if k in payload
+        }).model_dump(mode="json")
 
     async def restore_balance(self, user_id: UUID, moment_id: UUID) -> dict:
+        svc = SettlementService(self.session)
+        restored = await svc.settle_all_suggestions(user_id, moment_id)
+        # Return refreshed context shape
+        return await self.settlements(user_id, moment_id) | {
+            "restored_count": restored.get("restored_count", 0)
+        }
+
+    async def mark_suggestion_paid(self, user_id: UUID, moment_id: UUID, body: dict) -> dict:
+        req = d.TripSettlementMarkPaidRequest.model_validate(body)
+        from_id = req.from_user_id or req.from_member_id or ""
+        to_id = req.to_user_id or req.to_member_id or ""
+        if not from_id or not to_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="from_user_id and to_user_id are required",
+            )
+        svc = SettlementService(self.session)
+        await svc.settle_suggestion(
+            user_id,
+            moment_id,
+            from_member_id=from_id,
+            to_member_id=to_id,
+            amount_minor=req.amount_minor,
+            currency_code=req.currency_code,
+            client_request_id=req.client_request_id,
+        )
         return await self.settlements(user_id, moment_id)
 
     # ----- approvals ----------------------------------------------------- #

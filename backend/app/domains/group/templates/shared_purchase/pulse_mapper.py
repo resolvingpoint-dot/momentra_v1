@@ -1,7 +1,7 @@
 """Pulse projection mapper for Shared Purchase."""
 from __future__ import annotations
 
-from app.domains.group.settlements.service import cheap_life_preview
+from app.domains.group.settlements.trip_payload import build_trip_settlement_payload
 from app.domains.group.templates.shared_purchase.context import SharedPurchaseContext
 from app.domains.group.templates.shared_purchase.projection_helpers import (
     attention_items,
@@ -23,6 +23,7 @@ def build_pulse(ctx: SharedPurchaseContext) -> dict:
     if created and hasattr(created, "isoformat"):
         updated_label = relative_time_label(created.isoformat())
     nba = next_best_action(ctx)
+    settlement = build_trip_settlement_payload(ctx.moment)
     return {
         "moment_id": str(ctx.moment.id),
         "moment_type": "SHARED_PURCHASE",
@@ -59,7 +60,17 @@ def build_pulse(ctx: SharedPurchaseContext) -> dict:
             "count": ctx.ownership_count,
             "items": ctx.ownership_shares[:5],
         },
-        "settlement_preview": _settlement_preview(ctx),
+        "settlement_widget": settlement.get("settlement_widget"),
+        "settlement_preview": {
+            "harmony_label": settlement.get("harmony_label"),
+            "balance_insight": settlement.get("balance_insight"),
+            "currency_code": settlement.get("currency_code"),
+            "total_spent_minor": settlement.get("total_expenses_minor"),
+            "pending_count": settlement.get("members_needing_settlement"),
+            "suggested_transfer": settlement.get("suggested_transfer"),
+            "total_paid_minor": settlement.get("total_paid_minor"),
+            "pending_settlement_minor": settlement.get("pending_settlement_minor"),
+        },
         "next_best_action": nba,
         "alerts": _alerts(ctx),
         "attention_items": attention_items(ctx),
@@ -118,20 +129,3 @@ def _alerts(ctx: SharedPurchaseContext) -> list[dict]:
     if ctx.target_amount_minor and ctx.amount_remaining_minor > 0:
         alerts.append({"type": "funding", "message": "Funding target not reached"})
     return alerts
-
-
-def _settlement_preview(ctx: SharedPurchaseContext) -> dict:
-    """Projection-correct settlement preview — never invent harmony."""
-    computed = cheap_life_preview(ctx.moment)
-    if computed:
-        return computed
-    return {
-        "status": "preview",
-        "currency_code": ctx.currency_code,
-        "total_spent_minor": ctx.expense_total_minor,
-        "harmony_label": "In harmony" if ctx.expense_total_minor == 0 else "Tracking",
-        "balance_insight": "Nobody owes anything yet — log an expense to get started."
-        if ctx.expense_total_minor == 0
-        else f"{ctx.currency_code} {ctx.expense_total_minor / 100:.0f} tracked across the group",
-        "pending_count": 0,
-    }

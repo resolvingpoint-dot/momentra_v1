@@ -99,4 +99,18 @@ def build_pulse(ctx: SharedExperienceContext) -> dict:
         },
     ).model_dump(mode="json")
     payload["stats"] = stats
+    from app.domains.group.settlements.trip_payload import build_trip_settlement_payload
+
+    settlement = build_trip_settlement_payload(ctx.moment)
+    payload["settlement_widget"] = settlement.get("settlement_widget")
+    payload["settlement_preview"] = {
+        "harmony_label": settlement.get("harmony_label"),
+        "balance_insight": settlement.get("balance_insight"),
+        "currency_code": settlement.get("currency_code"),
+        "total_spent_minor": settlement.get("total_expenses_minor"),
+        "pending_count": settlement.get("members_needing_settlement"),
+        "suggested_transfer": settlement.get("suggested_transfer"),
+        "total_paid_minor": settlement.get("total_paid_minor"),
+        "pending_settlement_minor": settlement.get("pending_settlement_minor"),
+    }
     return payload

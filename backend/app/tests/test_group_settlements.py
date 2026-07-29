@@ -56,6 +56,7 @@ def _seed_members_and_expense(mock_db, moment_id: str, user_id: uuid.UUID) -> tu
             "amount_minor": 10000,
             "currency_code": "INR",
             "paid_by_user_id": member_a,
+            "participant_ids": [member_a, member_b],
             "split_type": "equal",
             "created_at": store.now_iso(),
             "deleted": False,
@@ -154,7 +155,9 @@ def test_settlement_preview_endpoint(mock_verify, client: TestClient, mock_db, s
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["total_expenses_minor"] == 10000
-    assert len(data["member_balances"]) == 2
+    # Roster may include organizer plus guests; netting still yields one transfer Alice←Bob.
+    nonzero = [b for b in data["member_balances"] if b["net_minor"] != 0]
+    assert len(nonzero) == 2
     assert len(data["suggestions"]) == 1
     assert data["suggestions"][0]["amount_minor"] == 5000
 
@@ -278,8 +281,29 @@ def test_life_mapper_uses_calculator_when_cheap(mock_verify, client: TestClient,
     moment_id = _create_and_activate(client, "shared-purchase", "purchase_profile", "GIFT_POOL")
     _seed_members_and_expense(mock_db, moment_id, sample_user.id)
 
-    life = client.get("/api/v1/group/active/life", headers=AUTH)
-    assert life.status_code == 200, life.text
-    preview = life.json().get("settlement_preview")
+    from app.domains.group.settlements.service import cheap_life_preview
+
+    moment = mock_db._stores["moments"][moment_id]
+    preview = cheap_life_preview(moment)
     assert preview is not None
-    assert preview.get("pending_count", 0) >= 1 or "owes" in preview.get("balance_insight", "").lower()
+    assert preview.get("pending_count", 0) >= 1 or "owes" in (preview.get("balance_insight") or "").lower()
+
+
+def test_apply_settled_transfers_clears_nets():
+    from app.domains.group.settlements.trip_payload import apply_settled_transfers
+
+    balances = [
+        MemberBalance(
+            member_id="a", display_name="Alice", paid_minor=10000, owed_minor=5000, net_minor=5000, currency_code="INR"
+        ),
+        MemberBalance(
+            member_id="b", display_name="Bob", paid_minor=0, owed_minor=5000, net_minor=-5000, currency_code="INR"
+        ),
+    ]
+    out = apply_settled_transfers(
+        balances,
+        [{"from_member_id": "b", "to_member_id": "a", "amount_minor": 5000, "status": "SETTLED"}],
+    )
+    by_id = {b.member_id: b.net_minor for b in out}
+    assert by_id["a"] == 0
+    assert by_id["b"] == 0

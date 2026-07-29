@@ -382,3 +382,50 @@ def test_living_activity_backfills_missing_ids(
         headers=AUTH,
     )
     assert detail.status_code == 200, detail.text
+
+@patch("app.dependencies.auth.verify_firebase_token")
+def test_living_pulse_settlement_widget_and_trip_context(
+    mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
+    from app.domains.group import moment_store as store
+
+    _auth(mock_verify)
+    mock_db.add(sample_user)
+    moment_id = _create_and_activate_living(client)
+    moment = mock_db._get_from_store("moments", moment_id)
+    state = store.read_state(moment)
+    member_a = store.new_id()
+    member_b = store.new_id()
+    state["runtime"]["guests"] = [
+        {"id": member_a, "full_name": "Alex", "status": "confirmed"},
+        {"id": member_b, "full_name": "Sam", "status": "confirmed"},
+    ]
+    state["runtime"]["expenses"] = [
+        {
+            "id": store.new_id(),
+            "description": "Rent share",
+            "amount_minor": 10000,
+            "currency_code": "INR",
+            "paid_by_user_id": member_a,
+            "participant_ids": [member_a, member_b],
+            "split_type": "equal",
+            "created_at": store.now_iso(),
+            "deleted": False,
+        }
+    ]
+    store.write_state(moment, state)
+
+    pulse = client.get(
+        f"/api/v1/group/shared-living/moments/{moment_id}/pulse?force_refresh=true",
+        headers=AUTH,
+    )
+    assert pulse.status_code == 200, pulse.text
+    body = pulse.json()
+    widget = body.get("settlement_widget") or {}
+    assert widget.get("total_paid_minor", 0) > 0
+    assert widget.get("members_needing_settlement", 0) >= 1
+    assert body.get("settlement_preview", {}).get("pending_count", 0) >= 1
+
+    ctx = client.get(f"/api/v1/group/trips/{moment_id}/settlements/context", headers=AUTH)
+    assert ctx.status_code == 200, ctx.text
+    assert ctx.json()["pending_balances"]

@@ -25,6 +25,21 @@ def _trip(client: TestClient) -> str:
     return created.json()["moment_id"]
 
 
+def _trip_activated(client: TestClient) -> str:
+    mid = _trip(client)
+    client.put(
+        f"/api/v1/group/shared-experience/moments/{mid}/setup/draft",
+        json={"experience_profile": "TRIP_VACATION", "moment_name": "Settlement Trip"},
+        headers=AUTH,
+    )
+    activated = client.post(
+        f"/api/v1/group/shared-experience/moments/{mid}/setup/activate",
+        headers=AUTH,
+    )
+    assert activated.status_code == 200, activated.text
+    return mid
+
+
 @patch("app.dependencies.auth.verify_firebase_token")
 def test_trip_settlements_context_uses_engine_preview(mock_verify, client: TestClient, mock_db, sample_user: UserModel):
     """Projection correctness: empty trip must not invent fake debts; status is honest."""
@@ -42,6 +57,73 @@ def test_trip_settlements_context_uses_engine_preview(mock_verify, client: TestC
     # No expenses → no invented settlement suggestions
     assert data["pending_balances"] == []
     assert data["balance_sync_percent"] == 100.0
+    assert data.get("member_contributions") == []
+    assert data.get("suggested_transfer") is None
+    assert (data.get("settlement_widget") or {}).get("members_needing_settlement", 0) == 0
+
+
+@patch("app.dependencies.auth.verify_firebase_token")
+def test_trip_settlements_with_expense_and_mark_paid(mock_verify, client: TestClient, mock_db, sample_user: UserModel):
+    from app.domains.group import moment_store as store
+
+    _auth(mock_verify)
+    mock_db.add(sample_user)
+    mid = _trip_activated(client)
+    moment = mock_db._stores["moments"][mid]
+    state = store.read_state(moment)
+    member_a = store.new_id()
+    member_b = store.new_id()
+    state["runtime"]["guests"] = [
+        {"id": member_a, "full_name": "Alice", "status": "confirmed"},
+        {"id": member_b, "full_name": "Bob", "status": "confirmed"},
+    ]
+    state["runtime"]["expenses"] = [
+        {
+            "id": store.new_id(),
+            "description": "Dinner",
+            "amount_minor": 10000,
+            "currency_code": "INR",
+            "paid_by_user_id": member_a,
+            "participant_ids": [member_a, member_b],
+            "split_type": "equal",
+            "created_at": store.now_iso(),
+            "deleted": False,
+        }
+    ]
+    store.write_state(moment, state)
+
+    pulse = client.get(f"/api/v1/group/trips/{mid}/pulse", headers=AUTH)
+    assert pulse.status_code == 200, pulse.text
+    widget = pulse.json().get("settlement_widget") or {}
+    assert widget.get("total_paid_minor", 0) > 0
+    assert widget.get("members_needing_settlement", 0) >= 1
+
+    ctx = client.get(f"/api/v1/group/trips/{mid}/settlements/context", headers=AUTH)
+    assert ctx.status_code == 200, ctx.text
+    data = ctx.json()
+    assert data["pending_balances"]
+    assert data["suggested_transfer"]
+    assert data["suggested_transfer"]["from_user_id"]
+    assert data["suggested_transfer"]["to_user_id"]
+    assert data["member_contributions"]
+    assert data["balance_sync_percent"] < 100.0
+
+    sug = data["suggested_transfer"]
+    paid = client.post(
+        f"/api/v1/group/trips/{mid}/settlements/mark-paid",
+        json={
+            "from_user_id": sug["from_user_id"],
+            "to_user_id": sug["to_user_id"],
+            "amount_minor": sug["amount_minor"],
+            "currency_code": sug.get("currency_code") or "INR",
+            "client_request_id": f"test-mark-{mid}",
+        },
+        headers=AUTH,
+    )
+    assert paid.status_code == 200, paid.text
+    after = paid.json()
+    assert after.get("suggested_transfer") is None or after.get("pending_balances") == []
+    assert after["balance_sync_percent"] == 100.0
 
 
 @patch("app.dependencies.auth.verify_firebase_token")

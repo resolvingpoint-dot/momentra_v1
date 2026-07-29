@@ -68,9 +68,33 @@ class TripSettlementContext(BaseModel):
     balance_sync_percent: float = 100.0
     balance_insight: str
     harmony_label: str
+    cover_image_url: str | None = None
+    currency_code: str = "INR"
+    total_expenses_minor: int = 0
+    total_paid_minor: int = 0
+    pending_settlement_minor: int = 0
+    unsettled_minor: int = 0
+    members_needing_settlement: int = 0
+    split_method: str = "EQUAL"
+    members_count: int = 0
+    member_contributions: list[dict] = Field(default_factory=list)
+    suggested_transfer: dict | None = None
+    suggestions: list[dict] = Field(default_factory=list)
     pending_balances: list[dict] = Field(default_factory=list)
     participants: list[dict] = Field(default_factory=list)
     guests: list[dict] = Field(default_factory=list)
+    guest_attributions: list[dict] = Field(default_factory=list)
+    settlement_widget: dict | None = None
+
+
+class TripSettlementMarkPaidRequest(BaseModel):
+    from_user_id: str | None = None
+    to_user_id: str | None = None
+    from_member_id: str | None = None
+    to_member_id: str | None = None
+    amount_minor: int = Field(gt=0)
+    currency_code: str = "INR"
+    client_request_id: str | None = None
 
 
 # ----- approvals ---------------------------------------------------------- #

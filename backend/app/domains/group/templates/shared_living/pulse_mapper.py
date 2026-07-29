@@ -1,6 +1,7 @@
 """Pulse projection mapper for Shared Living."""
 from __future__ import annotations
 
+from app.domains.group.settlements.trip_payload import build_trip_settlement_payload
 from app.domains.group.templates.shared_living.context import SharedLivingContext
 from app.domains.group.templates.shared_living.projection_helpers import (
     attention_items,
@@ -27,6 +28,7 @@ def build_pulse(ctx: SharedLivingContext) -> dict:
     nba = next_best_action(ctx)
     health = experience_health_percent(ctx)
     open_tasks = open_task_count(ctx)
+    settlement = build_trip_settlement_payload(ctx.moment)
     return {
         "moment_id": str(ctx.moment.id),
         "moment_type": "SHARED_LIVING",
@@ -59,6 +61,17 @@ def build_pulse(ctx: SharedLivingContext) -> dict:
             for p in ctx.polls
             if str(p.get("status", "open")).lower() not in {"closed", "resolved"}
         ][:5],
+        "settlement_widget": settlement.get("settlement_widget"),
+        "settlement_preview": {
+            "harmony_label": settlement.get("harmony_label"),
+            "balance_insight": settlement.get("balance_insight"),
+            "currency_code": settlement.get("currency_code"),
+            "total_spent_minor": settlement.get("total_expenses_minor"),
+            "pending_count": settlement.get("members_needing_settlement"),
+            "suggested_transfer": settlement.get("suggested_transfer"),
+            "total_paid_minor": settlement.get("total_paid_minor"),
+            "pending_settlement_minor": settlement.get("pending_settlement_minor"),
+        },
         "next_best_action": nba,
         "alerts": _alerts(ctx),
         "attention_items": attention_items(ctx),

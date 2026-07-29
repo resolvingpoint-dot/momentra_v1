@@ -94,6 +94,8 @@ class PurchasePulse(BaseModel):
     metric_tiles: list[dict] = Field(default_factory=list)
     recent_activity: list[dict] = Field(default_factory=list)
     health_trend: dict = Field(default_factory=lambda: {"label": "", "value": 0, "direction": "up"})
+    settlement_widget: dict | None = None
+    settlement_preview: dict | None = None
     stats: PurchasePulseStats
 
 
@@ -232,6 +234,8 @@ class LivingPulse(BaseModel):
     recent_activity: list[dict] = Field(default_factory=list)
     health_trend: dict = Field(default_factory=lambda: {"label": "", "value": 0, "direction": "up"})
     operations_progress: dict | None = None
+    settlement_widget: dict | None = None
+    settlement_preview: dict | None = None
     stats: LivingPulseStats
 
 
