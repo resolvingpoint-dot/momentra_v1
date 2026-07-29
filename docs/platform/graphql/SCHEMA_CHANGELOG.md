@@ -4,11 +4,6 @@
 
 - checksum: `4eb82b9db4dc7e3069936d053af35f9ebd26b370ca6ea200ce7d9db5eb31d4fa`
 - previous: `8c1868543a83894dcf6fc021083864df7913535a73702a11ffca80f9b7511d4e`
-
-## 2026-07-29 — `4eb82b9db4dc`
-
-- checksum: `4eb82b9db4dc7e3069936d053af35f9ebd26b370ca6ea200ce7d9db5eb31d4fa`
-- previous: `8c1868543a83894dcf6fc021083864df7913535a73702a11ffca80f9b7511d4e`
 - notes: Personal Home — `personalHome` → cards + template detail JSON (REST `/personal/moments/home`)
 
 ## 2026-07-29 — `8c1868543a83`
