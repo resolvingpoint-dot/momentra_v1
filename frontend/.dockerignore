@@ -1,0 +1,13 @@
+node_modules
+.next
+.open-next
+.git
+.env
+.env.local
+.env*.local
+*.md
+.dev.vars
+coverage
+playwright-report
+test-results
+.turbo

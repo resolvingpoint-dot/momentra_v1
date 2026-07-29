@@ -56,6 +56,8 @@ function getAllowedDevOrigins(): string[] {
 }
 
 const nextConfig: NextConfig = {
+  // Required for Docker / Dokploy runner image
+  output: "standalone",
   allowedDevOrigins: getAllowedDevOrigins(),
   turbopack: {
     root: projectRoot,
