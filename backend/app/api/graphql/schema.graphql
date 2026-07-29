@@ -66,6 +66,14 @@ type BusinessLife {
   payload: JSON!
 }
 
+type BusinessMemory {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  heroTitle: String
+  heroSubtitle: String
+  payload: JSON!
+}
+
 type BusinessPulse {
   isEmpty: Boolean!
   activeMomentCount: Int!
@@ -172,6 +180,14 @@ type GroupLife {
   payload: JSON!
 }
 
+type GroupMemory {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  heroTitle: String
+  heroSubtitle: String
+  payload: JSON!
+}
+
 type GroupMoment {
   id: ID!
   title: String
@@ -219,6 +235,14 @@ scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads
 union LifeResult = PersonalLife | GroupLife | BusinessLife
 
 enum LifeScopeGQL {
+  PERSONAL
+  GROUP
+  BUSINESS
+}
+
+union MemoryResult = PersonalMemory | GroupMemory | BusinessMemory
+
+enum MemoryScopeGQL {
   PERSONAL
   GROUP
   BUSINESS
@@ -290,6 +314,15 @@ type PersonalLife {
   payload: JSON!
 }
 
+type PersonalMemory {
+  isEmpty: Boolean!
+  patternInsightCount: Int!
+  heroBadge: String
+  heroTitle: String
+  heroSubtitle: String
+  payload: JSON!
+}
+
 type PersonalPulse {
   overallRhythmState: String!
   activeMomentCount: Int!
@@ -348,5 +381,6 @@ type Query {
   groupHome: GroupHome!
   businessHome(workspaceId: ID = null): BusinessHome!
   life(scope: LifeScopeGQL!, forceRefresh: Boolean! = false): LifeResult!
+  memory(scope: MemoryScopeGQL!, forceRefresh: Boolean! = false, momentType: String = null): MemoryResult!
   health: String!
 }

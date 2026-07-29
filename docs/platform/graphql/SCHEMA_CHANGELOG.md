@@ -1,5 +1,11 @@
 # GraphQL Schema Changelog
 
+## 2026-07-29 — `280454b6a106`
+
+- checksum: `280454b6a10638c4bd45663fd7d5186b17a0a777a03dc1c7b1a4b4c162e1d4a0`
+- previous: `a82d49312d65af2c37f5d67cac68470a3f9e2467d6817af9be4dd5642c928f8f`
+- notes: Memory — `memory(scope)` → `PersonalMemory` | `GroupMemory` | `BusinessMemory` (Phase 3 complete)
+
 ## 2026-07-29 — `a82d49312d65`
 
 - checksum: `a82d49312d65af2c37f5d67cac68470a3f9e2467d6817af9be4dd5642c928f8f`

@@ -1,0 +1,37 @@
+query PersonalMemory {
+  memory(scope: PERSONAL) {
+    __typename
+    ... on PersonalMemory {
+      isEmpty
+      patternInsightCount
+      heroBadge
+      heroTitle
+      heroSubtitle
+      payload
+    }
+  }
+}
+
+query GroupMemory {
+  memory(scope: GROUP) {
+    __typename
+    ... on GroupMemory {
+      isEmpty
+      activeMomentCount
+      heroTitle
+      payload
+    }
+  }
+}
+
+query BusinessMemory {
+  memory(scope: BUSINESS) {
+    __typename
+    ... on BusinessMemory {
+      isEmpty
+      activeMomentCount
+      heroTitle
+      payload
+    }
+  }
+}
