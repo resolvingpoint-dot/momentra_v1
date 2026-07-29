@@ -56,6 +56,9 @@ def configure_logging(debug: bool = False) -> None:
     )
 
     _configured = True
+    from app.core.log_context import install_request_context_log_filter
+
+    install_request_context_log_filter()
     logging.getLogger(__name__).debug("Logging configured (level=%s)", level)
 
 
@@ -71,7 +74,15 @@ class JsonLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for key in ("request_id", "duration_ms", "cache_hit", "user_id", "context", "template"):
+        for key in (
+            "request_id",
+            "correlation_id",
+            "duration_ms",
+            "cache_hit",
+            "user_id",
+            "context",
+            "template",
+        ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
         if record.exc_info:

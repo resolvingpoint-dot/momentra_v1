@@ -37,3 +37,27 @@ class PaginatedResponse(BaseModel, Generic[T]):
             per_page=params.per_page,
             total_pages=max(1, -(-total // params.per_page)),
         )
+
+
+class CursorParams(BaseModel):
+    """Cursor pagination params for new list endpoints (see BACKEND_API_STANDARDS)."""
+
+    cursor: str | None = Query(None, description="Opaque cursor from a previous page")
+    limit: int = Query(50, ge=1, le=100, description="Max items to return")
+
+
+class CursorPage(BaseModel, Generic[T]):
+    items: list[T]
+    next_cursor: str | None = None
+    has_more: bool = False
+
+    @classmethod
+    def create(
+        cls,
+        items: list[T],
+        *,
+        next_cursor: str | None = None,
+        has_more: bool | None = None,
+    ) -> CursorPage[T]:
+        more = has_more if has_more is not None else next_cursor is not None
+        return cls(items=items, next_cursor=next_cursor, has_more=more)

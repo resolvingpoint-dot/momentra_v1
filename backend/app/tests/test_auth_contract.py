@@ -140,10 +140,12 @@ def test_validate_production_security_accepts_supabase_url_fallback():
         cors_origins_str="https://www.momentra.tech",
         storage_public_base_url="",
         supabase_url="https://example.supabase.co",
+        supabase_secret_key="test-secret-key",
+        storage_bucket="momentra-attachments",
     )
     validate_production_security(ok)
     assert ok.effective_storage_public_base_url.startswith("https://example.supabase.co/")
-
+    assert "momentra-attachments" in ok.effective_storage_public_base_url
 
 def test_refresh_rejects_garbage(client: TestClient, mock_db):
     resp = client.post("/api/v1/auth/refresh", json={"refresh_token": "not-a-jwt"})

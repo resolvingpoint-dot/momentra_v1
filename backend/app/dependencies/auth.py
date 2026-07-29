@@ -4,7 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict[str, Any]:
     if credentials is None:
@@ -38,7 +39,9 @@ async def get_current_user(
     # Try Firebase ID token first
     try:
         decoded = verify_firebase_token(token)
-        return {"type": "firebase", "uid": decoded["uid"], "payload": decoded}
+        uid = decoded["uid"]
+        request.state.user_uid = uid
+        return {"type": "firebase", "uid": uid, "payload": decoded}
     except Exception:
         pass
 
@@ -58,14 +61,17 @@ async def get_current_user(
             detail="Refresh token cannot be used for authentication",
         )
 
+    uid = decoded["sub"]
+    request.state.user_uid = uid
     return {
         "type": "session",
-        "uid": decoded["sub"],
+        "uid": uid,
         "payload": decoded,
     }
 
 
 async def get_current_user_id(
+    request: Request,
     auth_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UUID:
@@ -78,4 +84,7 @@ async def get_current_user_id(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user_id_var.set(str(user.id))
+    request.state.user_id = str(user.id)
+    if auth_user.get("uid"):
+        request.state.user_uid = auth_user["uid"]
     return user.id

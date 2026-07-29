@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.events import emit_auth_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.firebase import verify_firebase_token
@@ -17,7 +19,7 @@ from app.core.security import (
     create_session_token,
     get_session_expires_at,
 )
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_current_user_id
 from app.domains.auth.refresh_sessions import RefreshSessionError, RefreshSessionService
 from app.domains.module_states.service import ModuleStateService
 from app.domains.preferences.service import UserPreferenceService
@@ -47,6 +49,15 @@ class TestLoginRequest(BaseModel):
     firebase_uid: str = Field(min_length=3, max_length=128)
     email: str | None = None
     display_name: str | None = None
+
+
+class SessionResponse(BaseModel):
+    id: str
+    created_at: str
+    last_used_at: str | None = None
+    expires_at: str
+    user_agent: str | None = None
+    ip: str | None = None
 
 
 def _client_ip(request: Request | None) -> str | None:
@@ -188,6 +199,11 @@ async def firebase_exchange(
 
     user = await _provision_user(db, decoded)
     tokens = await _issue_tokens(db, user, request)
+    await emit_auth_event(
+        "auth.login",
+        user_id=user.id,
+        payload={"method": "firebase_exchange", "ip": _client_ip(request)},
+    )
     response = FirebaseExchangeResponse(
         user=UserResponse.model_validate(user),
         tokens=tokens,
@@ -217,6 +233,7 @@ async def refresh_tokens(
         )
 
     service = RefreshSessionService(db)
+    prior = await service.get_by_token(plaintext)
     try:
         new_plaintext, session = await service.rotate(
             plaintext,
@@ -224,11 +241,22 @@ async def refresh_tokens(
             ip=_client_ip(request),
         )
     except RefreshSessionError as exc:
+        if "reuse" in str(exc) and prior is not None:
+            await emit_auth_event(
+                "auth.refresh_reuse",
+                user_id=prior.user_id,
+                payload={"family_id": str(prior.family_id)},
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         ) from exc
 
+    await emit_auth_event(
+        "auth.refresh",
+        user_id=session.user_id,
+        payload={"session_id": str(session.id)},
+    )
     tokens = TokenResponse(
         access_token=create_access_token(session.firebase_uid),
         refresh_token=new_plaintext,
@@ -255,7 +283,14 @@ async def logout(
         body.refresh_token if body else None,
     )
     if plaintext:
+        session = await RefreshSessionService(db).get_by_token(plaintext)
         await RefreshSessionService(db).revoke_token(plaintext)
+        if session is not None:
+            await emit_auth_event(
+                "auth.logout",
+                user_id=session.user_id,
+                payload={"session_id": str(session.id)},
+            )
 
     response = JSONResponse({})
     _clear_refresh_cookie(response)
@@ -286,6 +321,11 @@ async def logout_all(
             detail="User not found",
         )
     revoked = await RefreshSessionService(db).revoke_all_for_user(user.id)
+    await emit_auth_event(
+        "auth.logout_all",
+        user_id=user.id,
+        payload={"revoked": revoked},
+    )
     # Also clear cookie if present (web).
     response_payload = {"revoked": revoked}
     # Prefer JSONResponse so we can clear cookie when web client hits this.
@@ -294,6 +334,49 @@ async def logout_all(
         _clear_refresh_cookie(response)
         return response  # type: ignore[return-value]
     return response_payload
+
+
+@router.get("/sessions", response_model=list[SessionResponse])
+async def list_sessions(
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> list[SessionResponse]:
+    """List active refresh sessions (devices) for the authenticated user."""
+    from app.application.queries.list_auth_sessions import list_auth_sessions
+
+    views = await list_auth_sessions(db, user_id)
+    return [
+        SessionResponse(
+            id=str(view.id),
+            created_at=view.created_at,
+            last_used_at=view.last_used_at,
+            expires_at=view.expires_at,
+            user_agent=view.user_agent,
+            ip=view.ip,
+        )
+        for view in views
+    ]
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_session(
+    session_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Revoke a single refresh session belonging to the caller."""
+    ok = await RefreshSessionService(db).revoke_by_id(user_id, session_id)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+    await emit_auth_event(
+        "auth.session_revoke",
+        user_id=user_id,
+        payload={"session_id": str(session_id)},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/sync")

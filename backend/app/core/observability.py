@@ -15,6 +15,7 @@ from app.core.request_context import (
     build_coalesced_var,
     cache_hit_var,
     context_var,
+    correlation_id_var,
     pop_request_telemetry,
     projection_build_ms_var,
     projection_version_var,
@@ -46,8 +47,11 @@ def _extract_routing_hints(request: Request) -> None:
 async def observability_middleware(request: Request, call_next: Callable) -> Response:
     """Function middleware so ContextVar telemetry survives into route handlers."""
     rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    cid = request.headers.get("X-Correlation-ID") or rid
     request.state.request_id = rid
+    request.state.correlation_id = cid
     request_id_var.set(rid)
+    correlation_id_var.set(cid)
     begin_request_telemetry(rid)
     cache_hit_var.set(False)
     user_id_var.set(None)
@@ -65,6 +69,7 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
             json.dumps(
                 {
                     "request_id": rid,
+                    "correlation_id": cid,
                     "method": request.method,
                     "path": request.url.path,
                     "duration_ms": round(duration_ms, 2),
@@ -76,6 +81,9 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
                 }
             )
         )
+        from app.core.metrics import record_request
+
+        record_request(request.method, request.url.path, 500, duration_ms)
         raise
 
     duration_ms = (time.perf_counter() - start) * 1000
@@ -91,6 +99,7 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
         projection_version_var.set(obs["projection_version"])
     log_entry = {
         "request_id": rid,
+        "correlation_id": cid,
         "method": request.method,
         "path": request.url.path,
         "status": response.status_code,
@@ -115,7 +124,12 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
     else:
         logger.info(json.dumps(log_entry))
 
+    from app.core.metrics import record_request
+
+    record_request(request.method, request.url.path, response.status_code, duration_ms)
+
     response.headers["X-Request-ID"] = rid
+    response.headers["X-Correlation-ID"] = cid
     response.headers["X-Duration-Ms"] = str(round(duration_ms, 2))
     if cache_hit is not None:
         response.headers["X-Cache-Hit"] = "true" if cache_hit else "false"
@@ -143,6 +157,7 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
                 headers={
                     "ETag": etag,
                     "X-Request-ID": rid,
+                    "X-Correlation-ID": cid,
                     "X-Duration-Ms": str(round(duration_ms, 2)),
                     "X-Projection-Version": str(pv),
                     "X-Cache-Hit": "true" if cache_hit else "false",

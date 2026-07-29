@@ -1,0 +1,37 @@
+query GroupMoment($id: ID!) {
+  groupMoment(id: $id) {
+    id
+    title
+    status
+    members {
+      id
+      displayName
+      role
+    }
+    balances {
+      memberId
+      netAmount
+      currencyCode
+    }
+    expenses(first: 20) {
+      nodes {
+        id
+        amount
+        paidBy {
+          id
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+    recentActivity(first: 10) {
+      nodes {
+        id
+        title
+        occurredAt
+      }
+    }
+  }
+}

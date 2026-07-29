@@ -32,6 +32,15 @@ async def get_pulse(
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    from app.authorization import ResourceRef, require
+    from app.authorization.require import BUSINESS_MOMENT_VIEW
+
+    await require(
+        db,
+        user_id,
+        BUSINESS_MOMENT_VIEW,
+        ResourceRef(kind="business_moment", id=moment_id),
+    )
     return await _svc(db).get_pulse(user_id, moment_id, force_refresh=force_refresh)
 
 

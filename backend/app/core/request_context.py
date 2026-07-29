@@ -5,6 +5,7 @@ from contextvars import ContextVar
 from typing import Any
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 cache_hit_var: ContextVar[bool | None] = ContextVar("cache_hit", default=None)
 user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
 context_var: ContextVar[str | None] = ContextVar("context", default=None)
@@ -44,6 +45,8 @@ def get_request_context() -> dict[str, Any]:
     ctx: dict[str, Any] = {}
     if (rid := request_id_var.get()) is not None:
         ctx["request_id"] = rid
+    if (cid := correlation_id_var.get()) is not None:
+        ctx["correlation_id"] = cid
     if (hit := cache_hit_var.get()) is not None:
         ctx["cache_hit"] = hit
     if (uid := user_id_var.get()) is not None:

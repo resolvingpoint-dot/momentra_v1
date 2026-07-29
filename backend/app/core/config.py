@@ -133,6 +133,29 @@ class Settings(BaseSettings):
     rate_limit_max_requests: int = 60
     rate_limit_window_seconds: int = 60
 
+    # Observability (Phase 1 platform)
+    enable_metrics: bool = False  # expose /metrics (Prometheus text)
+    enable_otel: bool = False  # optional OpenTelemetry FastAPI instrumentation
+
+    # GraphQL (Phase 2 + 2.5 hardening)
+    graphql_max_depth: int = 8
+    graphql_max_complexity: int = 200
+    graphql_query_timeout_ms: int = 5000
+    graphql_max_page_size: int = 50
+    graphql_max_nodes: int = 500
+    graphql_max_operations: int = 1
+    graphql_max_variable_bytes: int = 65536
+    graphql_max_body_bytes: int = 262144
+    graphql_max_aliases: int = 15
+    graphql_max_tokens: int = 1000
+    graphql_disable_introspection: bool = True
+    graphql_apq_enabled: bool = True
+    graphql_apq_ttl_seconds: int = 86400
+    graphql_apq_schema_version: str = "1"
+    graphql_persisted_only: bool = False
+    graphql_nplusone_detect: bool = False
+    graphql_resolver_timing: bool = False
+
     # Acceptance / test-only auth. Both flags must be true; refused when DEBUG=false.
     allow_test_auth: bool = False
     # When set, acceptance fixtures prefer this URL over DATABASE_URL.

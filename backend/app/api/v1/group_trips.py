@@ -324,6 +324,16 @@ async def restore_trip_balance(moment_id: UUID, user_id: UUID = Depends(get_curr
     return await _deep(db).restore_balance(user_id, moment_id)
 
 
+@router.post("/{moment_id}/settlements/mark-paid")
+async def mark_trip_suggestion_paid(
+    moment_id: UUID,
+    body: dict[str, Any] = Body(default={}),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await _deep(db).mark_suggestion_paid(user_id, moment_id, body)
+
+
 # ----- quick-add contexts ------------------------------------------------- #
 @router.get("/{moment_id}/quick-add/participant/context")
 async def trip_participant_context(moment_id: UUID, user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)) -> dict:

@@ -571,6 +571,15 @@ async def get_moment(
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    from app.authorization import ResourceRef, require
+    from app.authorization.require import PERSONAL_MOMENT_OWN
+
+    await require(
+        db,
+        user_id,
+        PERSONAL_MOMENT_OWN,
+        ResourceRef(kind="personal_moment", id=moment_id),
+    )
     return await _service(db).get_moment(user_id, moment_id)
 
 

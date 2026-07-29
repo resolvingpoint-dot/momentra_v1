@@ -1,0 +1,64 @@
+query PersonalPulse {
+  pulse(scope: PERSONAL) {
+    __typename
+    ... on PersonalPulse {
+      overallRhythmState
+      activeMomentCount
+      isEmpty
+      heroTitle
+      heroSubtitle
+      ctaLabel
+      lifeOperations
+      futureBuilding
+      lifestyle
+      emotionalSecurity
+    }
+  }
+}
+
+query GroupPulse {
+  pulse(scope: GROUP) {
+    __typename
+    ... on GroupPulse {
+      isEmpty
+      activeMomentCount
+      heroTitle
+      heroSubtitle
+      ctaLabel
+      typeCards {
+        momentTypeCode
+        momentTypeName
+        linkedMomentId
+        actionLabel
+      }
+      whyGroups {
+        itemCode
+        title
+        description
+      }
+    }
+  }
+}
+
+query BusinessPulse($workspaceId: ID) {
+  pulse(scope: BUSINESS, workspaceId: $workspaceId) {
+    __typename
+    ... on BusinessPulse {
+      isEmpty
+      activeMomentCount
+      heroTitle
+      heroSubtitle
+      ctaLabel
+      dimensionCards {
+        momentTypeCode
+        momentTypeName
+        linkedMomentId
+      }
+      benefits {
+        itemCode
+        title
+        description
+      }
+    }
+  }
+}

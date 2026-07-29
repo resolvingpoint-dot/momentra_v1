@@ -142,3 +142,33 @@ class RefreshSessionService:
                 count += 1
         await self._db.flush()
         return count
+
+    async def list_active_for_user(self, user_id: UUID) -> list[AuthRefreshSessionModel]:
+        """Active (non-revoked, non-expired) refresh sessions for device management UI."""
+        now = datetime.now(timezone.utc)
+        result = await self._db.execute(
+            select(AuthRefreshSessionModel)
+            .where(
+                AuthRefreshSessionModel.user_id == user_id,
+                AuthRefreshSessionModel.revoked_at.is_(None),
+                AuthRefreshSessionModel.expires_at > now,
+            )
+            .order_by(AuthRefreshSessionModel.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def revoke_by_id(self, user_id: UUID, session_id: UUID) -> bool:
+        """Revoke one session belonging to ``user_id``. Returns False if not found."""
+        result = await self._db.execute(
+            select(AuthRefreshSessionModel).where(
+                AuthRefreshSessionModel.id == session_id,
+                AuthRefreshSessionModel.user_id == user_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        if row.revoked_at is None:
+            row.revoked_at = datetime.now(timezone.utc)
+            await self._db.flush()
+        return True

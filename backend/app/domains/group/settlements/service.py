@@ -123,13 +123,9 @@ class SettlementService:
         )
 
     def preview_for_moment(self, moment: MomentModel) -> SettlementPreview:
-        currency = _moment_currency(moment)
-        return calculator.build_preview(
-            str(moment.id),
-            _active_expenses(moment),
-            _members(moment),
-            currency_code=currency,
-        )
+        from app.domains.group.settlements.trip_payload import build_preview_with_settlements
+
+        return build_preview_with_settlements(moment)
 
     async def preview(self, user_id: UUID, moment_id: UUID) -> dict:
         moment = await self._require(user_id, moment_id)
@@ -215,6 +211,54 @@ class SettlementService:
         await self._invalidate(user_id, moment, "settlement:patch")
         return self.repo.to_record(moment, updated).model_dump(mode="json")
 
+    async def settle_suggestion(
+        self,
+        user_id: UUID,
+        moment_id: UUID,
+        *,
+        from_member_id: str,
+        to_member_id: str,
+        amount_minor: int,
+        currency_code: str | None = None,
+        client_request_id: str | None = None,
+    ) -> dict:
+        """Create a SETTLED settlement for a preview suggestion (Mark as Paid)."""
+        body = SettlementCreateRequest(
+            from_member_id=from_member_id,
+            to_member_id=to_member_id,
+            amount_minor=amount_minor,
+            currency_code=currency_code or "INR",
+            description="Marked paid from settlement suggestions",
+            client_request_id=client_request_id,
+        )
+        created = await self.create(user_id, moment_id, body)
+        settlement_id = str(created.get("id") or "")
+        if not settlement_id:
+            return created
+        return await self.mark_settled(user_id, moment_id, settlement_id)
+
+    async def settle_all_suggestions(self, user_id: UUID, moment_id: UUID) -> dict:
+        """Settle every open transfer suggestion (Restore Crew Balance)."""
+        moment = await self._require(user_id, moment_id)
+        preview = self.preview_for_moment(moment)
+        settled: list[dict] = []
+        for idx, s in enumerate(preview.suggestions):
+            row = await self.settle_suggestion(
+                user_id,
+                moment_id,
+                from_member_id=s.from_member_id,
+                to_member_id=s.to_member_id,
+                amount_minor=s.amount_minor,
+                currency_code=s.currency_code,
+                client_request_id=f"restore:{moment_id}:{s.from_member_id}:{s.to_member_id}:{s.amount_minor}:{idx}",
+            )
+            settled.append(row)
+        from app.domains.group.settlements.trip_payload import build_trip_settlement_payload
+
+        payload = build_trip_settlement_payload(moment)
+        payload["restored_count"] = len(settled)
+        return payload
+
     async def mark_settled(self, user_id: UUID, moment_id: UUID, settlement_id: str) -> dict:
         moment = await self._require(user_id, moment_id)
         existing = self.repo.get_by_id(moment, settlement_id)
@@ -258,10 +302,7 @@ def cheap_life_preview(moment: MomentModel) -> dict | None:
     members = _members(moment)
     if not expenses or len(members) < 2:
         return None
-    preview = calculator.build_preview(
-        str(moment.id),
-        expenses,
-        members,
-        currency_code=_moment_currency(moment),
-    )
+    from app.domains.group.settlements.trip_payload import build_preview_with_settlements
+
+    preview = build_preview_with_settlements(moment)
     return calculator.life_preview_dict(preview)

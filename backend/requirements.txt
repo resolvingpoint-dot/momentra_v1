@@ -14,3 +14,4 @@ alembic>=1.18.0
 psycopg2-binary>=2.9.0
 redis>=5.2.0
 celery>=5.4.0
+strawberry-graphql[fastapi]>=0.262.0

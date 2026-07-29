@@ -42,8 +42,38 @@ async def _get_redis():
     return None
 
 
+def peek_bearer_uid(request: Request) -> str | None:
+    """Best-effort identity for rate-limit keys before FastAPI auth deps run.
+
+    Decodes Momentra session JWTs only. Firebase ID tokens are not peeked here
+    (exchange is body-based; subsequent traffic uses session access tokens).
+    """
+    existing = getattr(request.state, "user_uid", None)
+    if existing:
+        return str(existing)
+    auth = request.headers.get("authorization") or ""
+    if not auth.lower().startswith("bearer "):
+        return None
+    token = auth[7:].strip()
+    if not token:
+        return None
+    try:
+        from app.core.security import decode_session_token
+
+        decoded = decode_session_token(token)
+    except Exception:
+        return None
+    if decoded.get("type") == "refresh":
+        return None
+    sub = decoded.get("sub")
+    if not sub:
+        return None
+    request.state.user_uid = sub
+    return str(sub)
+
+
 def _rate_limit_key(request: Request) -> str:
-    uid = getattr(request.state, "user_uid", None)
+    uid = peek_bearer_uid(request) or getattr(request.state, "user_uid", None)
     if uid:
         return f"rl:{uid}"
     forwarded = request.headers.get("x-forwarded-for", "")
@@ -91,7 +121,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         app: ASGIApp,
         max_requests: int = 60,
         window_seconds: int = 60,
-        exclude_paths: tuple[str, ...] = ("/health", "/health/ready", "/docs", "/redoc", "/openapi.json"),
+        exclude_paths: tuple[str, ...] = (
+            "/health",
+            "/health/ready",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+            "/metrics",
+        ),
     ) -> None:
         super().__init__(app)
         self.max_requests = max_requests

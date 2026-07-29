@@ -15,7 +15,10 @@ from app.core.exceptions import register_exception_handlers
 from app.core.firebase import init_firebase
 from app.core.logging import configure_logging
 from app.core.observability import observability_middleware
+from app.core.otel import maybe_instrument_otel
 from app.core.rate_limit import add_rate_limiting
+from app.security.headers import add_security_headers
+from app.api.graphql.http import add_graphql_hardening
 
 configure_logging(settings.debug)
 logger = logging.getLogger(__name__)
@@ -71,6 +74,9 @@ app = FastAPI(
 )
 
 register_exception_handlers(app)
+maybe_instrument_otel(app)
+add_security_headers(app)
+add_graphql_hardening(app)
 
 
 @app.middleware("http")
@@ -115,6 +121,15 @@ if not settings.debug:
         window_seconds=settings.rate_limit_window_seconds,
     )
 
+if settings.enable_metrics or settings.debug:
+    from fastapi.responses import PlainTextResponse
+
+    from app.core.metrics import render_prometheus
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint() -> PlainTextResponse:
+        return PlainTextResponse(render_prometheus(), media_type="text/plain; version=0.0.4")
+
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(me.router, prefix="/api/v1")
 app.include_router(app_router.router, prefix="/api/v1")
@@ -141,6 +156,12 @@ app.include_router(debug.router, prefix="/api/v1")
 # Health probes are mounted at the app root (no /api/v1 prefix) so infra probes
 # and the rate-limit exclusion list keep hitting stable /health paths.
 app.include_router(health.router)
+
+# GraphQL read platform (Phase 2) — composed reads only; REST remains commands.
+from app.api.graphql import create_graphql_router
+
+app.include_router(create_graphql_router(), prefix="")
+
 # Dev-only stub upload target. Production requires STORAGE_PUBLIC_BASE_URL and
 # never mounts public /local-uploads.
 if settings.debug and not settings.is_production:
