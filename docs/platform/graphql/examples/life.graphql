@@ -1,0 +1,37 @@
+query PersonalLife {
+  life(scope: PERSONAL) {
+    __typename
+    ... on PersonalLife {
+      isEmpty
+      activeMomentCount
+      dateRangeLabel
+      metrics
+      payload
+    }
+  }
+}
+
+query GroupLife {
+  life(scope: GROUP) {
+    __typename
+    ... on GroupLife {
+      isEmpty
+      activeMomentCount
+      dateRangeLabel
+      metrics
+      payload
+    }
+  }
+}
+
+query BusinessLife {
+  life(scope: BUSINESS) {
+    __typename
+    ... on BusinessLife {
+      isEmpty
+      activeMomentCount
+      metrics
+      payload
+    }
+  }
+}

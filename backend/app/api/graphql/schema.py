@@ -10,6 +10,7 @@ from app.api.graphql.queries.activity import ActivityQuery
 from app.api.graphql.queries.business_home import BusinessHomeQuery
 from app.api.graphql.queries.group_home import GroupHomeQuery
 from app.api.graphql.queries.group_moment import GroupMomentQuery
+from app.api.graphql.queries.life import LifeQuery
 from app.api.graphql.queries.personal_home import PersonalHomeQuery
 from app.api.graphql.queries.pulse import PulseQuery
 from app.core.config import settings
@@ -23,6 +24,7 @@ class Query(
     PersonalHomeQuery,
     GroupHomeQuery,
     BusinessHomeQuery,
+    LifeQuery,
 ):
     """Root query type. Mutations are intentionally omitted (REST = commands)."""
 

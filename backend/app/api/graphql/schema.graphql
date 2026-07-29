@@ -58,6 +58,14 @@ type BusinessHome {
   footerBand: JSON
 }
 
+type BusinessLife {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  dateRangeLabel: String
+  metrics: JSON
+  payload: JSON!
+}
+
 type BusinessPulse {
   isEmpty: Boolean!
   activeMomentCount: Int!
@@ -156,6 +164,14 @@ type GroupHome {
   howItWorks: [PulseEmptyItem!]!
 }
 
+type GroupLife {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  dateRangeLabel: String
+  metrics: JSON
+  payload: JSON!
+}
+
 type GroupMoment {
   id: ID!
   title: String
@@ -199,6 +215,14 @@ type GroupPulse {
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
+
+union LifeResult = PersonalLife | GroupLife | BusinessLife
+
+enum LifeScopeGQL {
+  PERSONAL
+  GROUP
+  BUSINESS
+}
 
 type PageInfo {
   hasNextPage: Boolean!
@@ -258,6 +282,14 @@ type PersonalHomeCard {
   actionLabel: String
 }
 
+type PersonalLife {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  dateRangeLabel: String
+  metrics: JSON
+  payload: JSON!
+}
+
 type PersonalPulse {
   overallRhythmState: String!
   activeMomentCount: Int!
@@ -315,5 +347,6 @@ type Query {
   personalHome(forceRefresh: Boolean! = false, momentType: String = null): PersonalHome!
   groupHome: GroupHome!
   businessHome(workspaceId: ID = null): BusinessHome!
+  life(scope: LifeScopeGQL!, forceRefresh: Boolean! = false): LifeResult!
   health: String!
 }

@@ -1,5 +1,11 @@
 # GraphQL Schema Changelog
 
+## 2026-07-29 — `a82d49312d65`
+
+- checksum: `a82d49312d65af2c37f5d67cac68470a3f9e2467d6817af9be4dd5642c928f8f`
+- previous: `f5c4605081178ad7a11a3e24366022e4ce95503b382fdb027ff5826678d47f72`
+- notes: Life Timeline — `life(scope)` → `PersonalLife` | `GroupLife` | `BusinessLife`
+
 ## 2026-07-29 — `f5c460508117`
 
 - checksum: `f5c4605081178ad7a11a3e24366022e4ce95503b382fdb027ff5826678d47f72`
