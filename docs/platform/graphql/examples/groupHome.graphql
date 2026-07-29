@@ -1,0 +1,22 @@
+query GroupHome {
+  groupHome {
+    isEmpty
+    activeMomentCount
+    heroTitle
+    heroSubtitle
+    ctaLabel
+    ctaSubtitle
+    typeCards {
+      momentTypeCode
+      momentTypeName
+      linkedMomentId
+      linkedMomentStatus
+      actionLabel
+    }
+    howItWorks {
+      itemCode
+      title
+      description
+    }
+  }
+}

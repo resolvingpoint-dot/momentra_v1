@@ -45,7 +45,7 @@ backend/app/
 ## GraphQL (Phase 2 / 2.5 / 3)
 
 - Endpoint: `POST /graphql` (Bearer access token; rate-limited)
-- Reads: `groupMoment`, `pulse(...)`, `activity(...)`, `personalHome`
+- Reads: `groupMoment`, `pulse(...)`, `activity(...)`, `personalHome`, `groupHome`
 - Resolvers → application queries → domain services
 - Field AuthZ via `require_permission(...)` for moment-scoped fields
 - No mutations; REST remains the command layer

@@ -1,5 +1,11 @@
 # GraphQL Schema Changelog
 
+## 2026-07-29 — `a080102cf8c2`
+
+- checksum: `a080102cf8c2269654fa870efcabb2927a0382489bb6b64c8fcef1242fbc5076`
+- previous: `4eb82b9db4dc7e3069936d053af35f9ebd26b370ca6ea200ce7d9db5eb31d4fa`
+- notes: Group Home — `groupHome` → type cards + how-it-works (REST `/group/moments/home`)
+
 ## 2026-07-29 — `4eb82b9db4dc`
 
 - checksum: `4eb82b9db4dc7e3069936d053af35f9ebd26b370ca6ea200ce7d9db5eb31d4fa`

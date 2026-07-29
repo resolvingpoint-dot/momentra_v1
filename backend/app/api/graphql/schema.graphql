@@ -128,6 +128,17 @@ type GroupExpensePaidBy {
   id: ID!
 }
 
+type GroupHome {
+  isEmpty: Boolean!
+  activeMomentCount: Int!
+  heroTitle: String!
+  heroSubtitle: String!
+  ctaLabel: String!
+  ctaSubtitle: String!
+  typeCards: [PulseTypeCard!]!
+  howItWorks: [PulseEmptyItem!]!
+}
+
 type GroupMoment {
   id: ID!
   title: String
@@ -285,5 +296,6 @@ type Query {
   pulse(scope: PulseScopeGQL!, forceRefresh: Boolean! = false, momentType: String = null, workspaceId: ID = null, momentId: ID = null): PulseResult
   activity(scope: ActivityScopeGQL!, momentId: ID = null, range: String! = "all", domain: String! = "all", kind: String! = "all", q: String = null, first: Int! = 50, after: String = null, page: Int! = 1, status: String! = "active"): ActivityResult
   personalHome(forceRefresh: Boolean! = false, momentType: String = null): PersonalHome!
+  groupHome: GroupHome!
   health: String!
 }
