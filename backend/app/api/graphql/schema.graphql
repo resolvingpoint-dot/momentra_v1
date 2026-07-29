@@ -193,6 +193,43 @@ type PersonalActivitySnapshot {
   raw: JSON
 }
 
+type PersonalHome {
+  activeMomentCount: Int!
+  isEmpty: Boolean!
+  subtitle: String!
+  cards: [PersonalHomeCard!]!
+  heroTitle: String
+  heroSubtitle: String
+  buildSpaceTitle: String
+  buildSpaceBody: String
+  lifeOperationsDetail: JSON
+  futureBuildingDetail: JSON
+  lifestyleDetail: JSON
+  emotionalSecurityDetail: JSON
+}
+
+type PersonalHomeCard {
+  momentTypeId: ID!
+  momentTypeCode: String!
+  momentTypeName: String!
+  description: String
+  cardCategoryLabel: String
+  themeColor: String
+  iconName: String
+  displayOrder: Int!
+  linkedMomentId: ID
+  linkedMomentStatus: String
+  momentName: String
+  currentRuntimeState: String
+  isActive: Boolean!
+  rhythmState: String
+  stateChipLabel: String
+  summaryText: String
+  coverImageUrl: String
+  systemTag: String
+  actionLabel: String
+}
+
 type PersonalPulse {
   overallRhythmState: String!
   activeMomentCount: Int!
@@ -247,5 +284,6 @@ type Query {
   groupMoment(id: ID!): GroupMoment
   pulse(scope: PulseScopeGQL!, forceRefresh: Boolean! = false, momentType: String = null, workspaceId: ID = null, momentId: ID = null): PulseResult
   activity(scope: ActivityScopeGQL!, momentId: ID = null, range: String! = "all", domain: String! = "all", kind: String! = "all", q: String = null, first: Int! = 50, after: String = null, page: Int! = 1, status: String! = "active"): ActivityResult
+  personalHome(forceRefresh: Boolean! = false, momentType: String = null): PersonalHome!
   health: String!
 }

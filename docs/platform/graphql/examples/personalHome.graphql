@@ -1,0 +1,25 @@
+query PersonalHome {
+  personalHome {
+    isEmpty
+    activeMomentCount
+    subtitle
+    heroTitle
+    heroSubtitle
+    cards {
+      momentTypeId
+      momentTypeCode
+      momentTypeName
+      description
+      linkedMomentId
+      linkedMomentStatus
+      momentName
+      isActive
+      actionLabel
+      coverImageUrl
+    }
+    lifeOperationsDetail
+    futureBuildingDetail
+    lifestyleDetail
+    emotionalSecurityDetail
+  }
+}
