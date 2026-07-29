@@ -1,5 +1,29 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Momentra API
+
+Web uses the shared backend at `/api/v1` (not a separate `backend_v1`).
+
+1. Start the API: `cd ../backend && ./run-dev.sh` (port **8002**)
+2. Copy `web/.env.example` → `.env.local` and set Firebase + `NEXT_PUBLIC_API_BASE_URL=https://api.mallaapp.org`
+3. Auth: Firebase sign-in → `POST api/v1/auth/firebase/exchange` → backend JWTs
+
+See [`docs/API_INTEGRATION.md`](../docs/API_INTEGRATION.md) for client rollout and DTO porting from `ios/` / `apk/`.
+
+## Empty-screen assets
+
+Download Personal, Group, and Business design images into `public/` (and native copy targets):
+
+```bash
+# from web/
+npm run bundle-empty-assets
+# or
+node scripts/bundle-context-empty-assets.mjs
+
+# from repo root
+node scripts/bundle-context-empty-assets.mjs
+```
+
 ## Getting Started
 
 First, run the development server:
@@ -31,6 +55,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Marketing (`/`) and the product app (`/app`) deploy together as one Next.js project.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Import this repo in [Vercel](https://vercel.com/new)
+2. Set **Root Directory** to `web`
+3. Copy env vars from [`.env.example`](.env.example) into the Vercel project
+4. Deploy — details in [`VERCEL.md`](./VERCEL.md)
+
+```bash
+npm run build && npm start   # local production check
+```

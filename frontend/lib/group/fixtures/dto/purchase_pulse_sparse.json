@@ -1,0 +1,29 @@
+{
+  "moment_id": "00000000-0000-4000-8000-000000000002",
+  "moment_type": "SHARED_PURCHASE",
+  "purchase_name": "Group laptop",
+  "target_amount_minor": 10000000,
+  "currency_code": "INR",
+  "total_contributed_minor": 0,
+  "amount_remaining_minor": 10000000,
+  "contribution_progress_percent": 0,
+  "participant_count": 0,
+  "settlement_preview": {
+    "status": "preview",
+    "currency_code": "INR",
+    "total_spent_minor": 0,
+    "harmony_label": "In harmony",
+    "balance_insight": "Nobody owes anything yet — log an expense to get started.",
+    "pending_count": 0
+  },
+  "stats": {
+    "contributors_joined": 0,
+    "total_expenses_minor": 0,
+    "contributions_minor": 0
+  },
+  "funded_amount_minor": 0,
+  "funding_percent": 0,
+  "alerts": [],
+  "insights": [],
+  "recent_activity": []
+}

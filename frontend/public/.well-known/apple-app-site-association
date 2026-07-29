@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TY9S2C44WR.MagnatePoint.Momentra",
+        "paths": [
+          "/invite",
+          "/invite/*",
+          "/company-invite",
+          "/company-invite/*"
+        ]
+      }
+    ]
+  }
+}

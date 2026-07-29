@@ -1,17 +1,11 @@
 import { type NextRequest } from "next/server";
-import { createClient } from "@/utils/supabase/middleware";
+import { updateSession } from "@/utils/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  const { supabase, response } = createClient(request);
-  await supabase.auth.getUser();
-  return response;
+  return updateSession(request);
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except static assets and images.
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  // Only refresh Supabase session for the product app. Marketing routes skip this.
+  matcher: ["/app/:path*"],
 };

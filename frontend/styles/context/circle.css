@@ -1,0 +1,45 @@
+[data-momentra-context="circle"] {
+  /* ───── Circle Magenta ───── */
+  /* Source: docs/design-tokens/tokens.md — Circle context row */
+
+  /* ───── Ground & Surfaces ───── */
+  --color-background:              #100520;
+  --color-surface:                 #100520;
+  --color-surface-container:       #1A0828;
+  --color-surface-container-low:   #140620;
+  --color-surface-container-lowest:#100520;
+  --color-surface-container-high:  #1E0E30;
+  --color-surface-variant:        #4A1060;
+  --color-primary-container:       #4A1060;
+
+  /* ───── Brand Magenta ───── */
+  --color-primary:                 #D946EF;
+  --color-on-primary:              #1A0828;
+  --color-on-primary-container:    #F5D0FE;
+  --color-secondary:               #E879F9;
+  --color-on-secondary:            #1A0828;
+  --color-tertiary:                #F5D0FE;
+  --color-on-tertiary:             #4A1060;
+
+  /* ───── Text ───── */
+  --color-on-surface:              #F5D0FE;
+  --color-on-surface-variant:      #E879F9;
+
+  /* ───── Outline / Glass ───── */
+  --color-outline:                 rgba(217, 70, 239, 0.25);
+  --color-glass-background:        rgba(255, 255, 255, 0.05);
+  --glass-blur-px:                 20;
+
+  /* ───── Semantic ───── */
+  --color-error:                   #FFB4AB;
+  --color-success:                 #4ADE80;
+
+  /* ───── Accent tags ───── */
+  --color-accent-escape:           #D946EF;
+  --color-accent-vow:              #E879F9;
+  --color-accent-pulse:            #D946EF;
+  --color-accent-summit:           #F5D0FE;
+
+  /* ───── Fonts ───── */
+  --font-sans:                     "Plus Jakarta Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}

@@ -1,0 +1,333 @@
+{
+  "catalog_version": 1,
+  "widgets": {
+    "PULSE-001": {
+      "title": "Overall health",
+      "what": "Shows the overall health of this Moment as a single score and status.",
+      "why": "Gives you an instant read on whether things are progressing well without scanning every widget.",
+      "how": {
+        "default": "A 0–100 health score refreshed from your recent activity, money, and Moment signals.",
+        "LIFE_OPERATIONS": "Your Ops Index (0–100) comes from your latest Life Operations health score, refreshed from recovery, pressure, mood, attention, and money activity. It stays blank until enough signal activity exists.",
+        "FUTURE_BUILDING": "Your Momentum score (0–100) comes from your Future Building momentum signal—learning, execution, milestones, and confidence—updated as you log progress.",
+        "LIFESTYLE": "Your Vitality score (0–100) blends health, energy, and routine signals from Lifestyle activity. Status bands like Thriving or Building follow that score.",
+        "RELATIONSHIPS": "Your Bond score (0–100) reflects relationship health from connection, trust, and support signals, updated as you log relationship activity."
+      }
+    },
+    "PULSE-002": {
+      "title": "Core parameters",
+      "what": "Shows the key dimensions that contribute to the overall health score.",
+      "why": "Helps you see why the overall score is high or low.",
+      "how": {
+        "default": "Each parameter is a 0–100 dimension score from your Moment metrics and recent activity.",
+        "LIFE_OPERATIONS": "Pressure, Recovery, Discipline, and Attention come from your latest metric snapshots. Attention is shown as the inverse of cognitive load.",
+        "FUTURE_BUILDING": "Learning, execution, growth, clarity, and confidence axes come from Future Building signals and related activity counts.",
+        "LIFESTYLE": "Joy, fulfillment, vitality, and exploration axes come from social, wellbeing, energy, and environment signals.",
+        "RELATIONSHIPS": "The radar axes—connection, trust, communication, support, presence, and growth—come from relationship metric scores and recent connection activity."
+      }
+    },
+    "PULSE-003": {
+      "title": "Financial summary",
+      "what": "Summarises the current financial position for this Moment.",
+      "why": "Gives immediate money context without opening full transaction history.",
+      "how": {
+        "default": "Totals come from money events logged this month for this Moment—spending, and budget or income where available.",
+        "LIFE_OPERATIONS": "Spent is the sum of this month’s debits. Budget and remaining come from credits and capacity; utilization is spent ÷ budget.",
+        "FUTURE_BUILDING": "Investment and category totals sum debits logged against Future Building money events.",
+        "LIFESTYLE": "Lifestyle spend sums debits for this Moment this period, grouped by category where shown.",
+        "RELATIONSHIPS": "Spend totals sum relationship-related debits for this Moment."
+      }
+    },
+    "PULSE-004": {
+      "title": "Recent activity",
+      "what": "Lists the latest activities logged in this Moment.",
+      "why": "Helps you see what recently changed.",
+      "how": {
+        "default": "Pulled from your activity timeline in newest-first order, including quick-add and money events linked to this Moment."
+      }
+    },
+    "PULSE-006": {
+      "title": "Financial intelligence",
+      "what": "Shows how spending is distributed across categories for this Moment.",
+      "why": "Helps you judge where money is going relative to this Moment’s purpose—not just the total spent.",
+      "how": {
+        "default": "Category shares are this month’s debits grouped by expense category, shown as amounts and percentages of total spend."
+      }
+    },
+    "PULSE-007": {
+      "title": "Current trend",
+      "what": "Shows the recent direction of this Moment over about the last 30 days.",
+      "why": "Helps you spot improving or declining momentum beyond a single day.",
+      "how": {
+        "default": "Built from recent timeline activity rolled into a short trend series. Sparse history may show an empty or partial chart."
+      }
+    },
+    "PULSE-008": {
+      "title": "Current state snapshot",
+      "what": "Quick gauges of important operational indicators right now.",
+      "why": "Lets you grasp the Moment’s state without deep analysis.",
+      "how": {
+        "default": "Gauge values are the latest metric or signal percents for this Moment (for example stability, recovery, momentum, or connection)."
+      }
+    },
+    "PULSE-009": {
+      "title": "Primary recommendation",
+      "what": "Suggests the highest-impact next action for this Moment.",
+      "why": "Helps you prioritise what matters most right now.",
+      "how": {
+        "default": "Chosen from your current opportunity card—priority and guidance based on recent scores, pressure/recovery, and profile signals."
+      }
+    },
+    "PULSE-010": {
+      "title": "Recommended actions",
+      "what": "Lists practical actions that can improve this Moment.",
+      "why": "Turns insights into steps you can take immediately.",
+      "how": {
+        "default": "Quick-add and action shortcuts for this Moment. Completing them feeds the same timeline and scores that refresh Pulse."
+      }
+    },
+    "PULSE-011": {
+      "title": "Pulse insights",
+      "what": "Highlights observations from recent activity and scores.",
+      "why": "Explains why recent changes matter in plain language.",
+      "how": {
+        "default": "Insight text comes from your latest runtime summary and activity volume. Confidence rises as more timeline events accumulate."
+      }
+    },
+    "MOMENT-001": {
+      "title": "Journey score",
+      "what": "Shows overall progress and health of this Moment as a journey score.",
+      "why": "Gives an instant sense of how successfully the journey is progressing.",
+      "how": {
+        "default": "A 0–100 journey score from this Moment’s primary health score, with a status band from that value.",
+        "LIFE_OPERATIONS": "Journey score mirrors your Ops Index / primary Life Operations score, with phases and insight from the latest runtime summary.",
+        "FUTURE_BUILDING": "Journey score mirrors Future Momentum from learning and execution signals.",
+        "LIFESTYLE": "Journey score mirrors Lifestyle Vitality from health, energy, and routine signals.",
+        "RELATIONSHIPS": "Journey score mirrors Bond / relationship health from connection and trust signals."
+      }
+    },
+    "MOMENT-002": {
+      "title": "Journey summary",
+      "what": "Summarises the current state of the journey—phases, insight, and key counts.",
+      "why": "Shows scale and status without opening every section.",
+      "how": {
+        "default": "Phases, insight text, and counts (days active, events, experiences) come from the journey hero built from runtime and timeline data."
+      }
+    },
+    "MOMENT-003": {
+      "title": "Journey activity",
+      "what": "Shows recent activities completed during this journey.",
+      "why": "Helps you see what has happened lately on the journey.",
+      "how": {
+        "default": "Recent journey timeline items from your activity feed for this Moment."
+      }
+    },
+    "MOMENT-004": {
+      "title": "Journey timeline",
+      "what": "Shows major events across the lifecycle of this Moment.",
+      "why": "Helps you see how the journey has evolved over time.",
+      "how": {
+        "default": "Chronological journey events from the latest activity timeline entries for this Moment."
+      }
+    },
+    "MOMENT-005": {
+      "title": "Financial progress",
+      "what": "Shows how money for this Moment has moved over time.",
+      "why": "Helps you compare financial movement across the journey.",
+      "how": {
+        "default": "A multi-month spend series from debits logged to this Moment, grouped by month and highlighting peak months or categories."
+      }
+    },
+    "MOMENT-008": {
+      "title": "Best moments",
+      "what": "Highlights the most meaningful experiences from this journey.",
+      "why": "Encourages you to revisit memorable milestones.",
+      "how": {
+        "default": "Drawn from saved Moment highlights when available; otherwise from recent meaningful timeline activity."
+      }
+    },
+    "MOMENT-TP": {
+      "title": "Turning points",
+      "what": "Marks notable shifts that changed the direction of this journey.",
+      "why": "Helps you recognise pivots that matter more than day-to-day noise.",
+      "how": {
+        "default": "From saved turning-point records for this Moment when available."
+      }
+    },
+    "MEMORY-001": {
+      "title": "Identity snapshot",
+      "what": "Shows the behavioural identity emerging from your accumulated experiences.",
+      "why": "Helps you see the pattern of who you are becoming—not just isolated activities.",
+      "how": {
+        "default": "Identity title, description, and confidence come from your latest identity snapshot for this Moment, updated when behaviour shifts meaningfully."
+      }
+    },
+    "MEMORY-002": {
+      "title": "Core pattern",
+      "what": "Shows the dominant behavioural dimensions shaping long-term behaviour.",
+      "why": "Helps you understand the drivers that consistently influence decisions.",
+      "how": {
+        "default": "Top behavioural dimensions with scores and interpretations from pattern analysis for this Moment."
+      }
+    },
+    "MEMORY-003": {
+      "title": "Best drivers",
+      "what": "Highlights the strongest behavioural contributors supporting growth.",
+      "why": "Reinforces what consistently helps you.",
+      "how": {
+        "default": "Highest-ranked drivers from behavioural driver rankings for this Moment."
+      }
+    },
+    "MEMORY-004": {
+      "title": "Lowest drivers",
+      "what": "Highlights weaker behavioural contributors that need attention.",
+      "why": "Surfaces improvement opportunities without focusing on single failures.",
+      "how": {
+        "default": "Lowest-ranked drivers from the same driver rankings used for best drivers."
+      }
+    },
+    "MEMORY-005": {
+      "title": "Behaviour patterns",
+      "what": "Shows recurring behavioural patterns from your history.",
+      "why": "Helps you spot consistency, improvement, and cycles.",
+      "how": {
+        "default": "Pattern cards from memory pattern snapshots, with confidence based on supporting activity."
+      }
+    },
+    "MEMORY-007": {
+      "title": "Emotional DNA",
+      "what": "Shows long-term emotional tendencies such as joy, stress, confidence, and connection.",
+      "why": "Helps you understand the emotional patterns under your experiences.",
+      "how": {
+        "default": "Emotional dimension scores and explanations from your emotional DNA snapshot for this Moment."
+      }
+    },
+    "MEMORY-008": {
+      "title": "Evolution timeline",
+      "what": "Shows how behavioural maturity has evolved over time.",
+      "why": "Helps you recognise long-term growth, not only short-term wins.",
+      "how": {
+        "default": "Chronological stages from evolution snapshots, with the current stage highlighted."
+      }
+    },
+    "MEMORY-009": {
+      "title": "AI interpretation",
+      "what": "Shows a high-confidence interpretation of the story emerging from your memories.",
+      "why": "Gives a meaningful read on the deeper pattern in your experiences.",
+      "how": {
+        "default": "Interpretation text from memory recommendations or the Moment’s narrative summary."
+      }
+    },
+    "MEMORY-010": {
+      "title": "Growth edge",
+      "what": "Highlights the behavioural area with the greatest opportunity to improve next.",
+      "why": "Points you toward the next stage of development.",
+      "how": {
+        "default": "Priority growth area and guidance from the next growth-edge recommendation for this Moment."
+      }
+    },
+    "MEMORY-ROI": {
+      "title": "Highest return behaviours",
+      "what": "Shows behaviours that return the most value for the effort you invest.",
+      "why": "Helps you double down on what works best over time.",
+      "how": {
+        "default": "Ranked return behaviours or ROI bars from driver rankings and Moment-specific return analysis."
+      }
+    },
+    "LIFE-001": {
+      "title": "Life score",
+      "what": "Shows your overall Life Score across Personal Moments.",
+      "why": "Gives a holistic view of life progress beyond any single Moment.",
+      "how": {
+        "default": "A 0–100 life health score aggregated from your active Personal Moment scores and life intelligence signals."
+      }
+    },
+    "LIFE-002": {
+      "title": "Life balance",
+      "what": "Visualises balance across core life dimensions.",
+      "why": "Helps you see which areas are strong and which need attention.",
+      "how": {
+        "default": "Dimension scores for Life Operations, Future Building, Lifestyle, and Relationships from the latest life balance model."
+      }
+    },
+    "LIFE-003": {
+      "title": "Life journey",
+      "what": "Shows how your overall life story has progressed over time.",
+      "why": "Helps you see long-term growth rather than daily noise.",
+      "how": {
+        "default": "Chronological life journey events from your life journey timeline."
+      }
+    },
+    "LIFE-004": {
+      "title": "Emotional trend",
+      "what": "Shows how emotional tone has moved recently.",
+      "why": "Helps you notice shifts in mood and connection across weeks.",
+      "how": {
+        "default": "A short emotional trend series derived from connection, fulfillment, stress, and momentum signals."
+      }
+    },
+    "LIFE-005": {
+      "title": "Dominant emotion",
+      "what": "Highlights the emotion most present in your recent life picture.",
+      "why": "Makes the emotional centre of your life easy to see at a glance.",
+      "how": {
+        "default": "Taken from your dominant emotion and emotional DNA breakdown in the life projection."
+      }
+    },
+    "LIFE-006": {
+      "title": "Connections",
+      "what": "Summarises important life connections and relationships.",
+      "why": "Keeps people and bonds visible in your overall life view.",
+      "how": {
+        "default": "From saved life connection records linked to your Personal life view."
+      }
+    },
+    "LIFE-007": {
+      "title": "Drift alert",
+      "what": "Flags when part of life is drifting off course.",
+      "why": "Surfaces early warnings so you can course-correct.",
+      "how": {
+        "default": "Shown when a drift alert exists in your life snapshots; otherwise hidden."
+      }
+    },
+    "LIFE-008": {
+      "title": "Leverage",
+      "what": "Points to the area where a small change can unlock more life progress.",
+      "why": "Focuses effort where it compounds most.",
+      "how": {
+        "default": "From your identified leverage area in the life aggregate when available."
+      }
+    },
+    "LIFE-009": {
+      "title": "Happiness drivers",
+      "what": "Shows what is contributing most to happiness right now.",
+      "why": "Reinforces the sources of wellbeing worth protecting.",
+      "how": {
+        "default": "Driver labels and return indicators from the life happiness projection."
+      }
+    },
+    "LIFE-010": {
+      "title": "Life intelligence",
+      "what": "Shares a deeper observation about your current life pattern.",
+      "why": "Goes beyond operational metrics into meaningful guidance.",
+      "how": {
+        "default": "From your life intelligence summary or the top life recommendation."
+      }
+    },
+    "LIFE-011": {
+      "title": "Monthly changes",
+      "what": "Summarises what shifted in life this month versus last.",
+      "why": "Makes month-over-month progress concrete.",
+      "how": {
+        "default": "From monthly change snapshot rows in your life projection."
+      }
+    },
+    "LIFE-012": {
+      "title": "Start with one action",
+      "what": "Recommends a single high-impact next step for life balance.",
+      "why": "Prevents overwhelm by prioritising one meaningful action.",
+      "how": {
+        "default": "Quick actions curated for the life tab; completing them feeds the Moments that refresh your Life Score."
+      }
+    }
+  }
+}

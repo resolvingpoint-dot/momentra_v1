@@ -34,9 +34,12 @@ yarn-error.log*
 .env*
 !.env.example
 
-# vercel
+# vercel local
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Book source archive (extracted PNGs live under public/books/)
+/public/books/*.zip

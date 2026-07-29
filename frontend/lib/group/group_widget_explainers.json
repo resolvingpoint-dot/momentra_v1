@@ -1,0 +1,247 @@
+{
+  "catalog_version": 1,
+  "widgets": {
+    "PULSE-001": {
+      "title": "Overall health",
+      "what": "Shows the overall health of this Group Moment as a single score and status.",
+      "why": "Lets you instantly see whether the group is healthy, stable, or needs attention.",
+      "how": {
+        "default": "A 0–100 health score from participation, progress, money activity, and group signals for this Moment.",
+        "SHARED_EXPERIENCE": "Experience Health blends trip readiness, participation, and money signals from your shared experience pulse.",
+        "SHARED_PURCHASE": "Purchase Health reflects funding progress, contributor activity, and spend against the shared purchase goal.",
+        "SHARED_LIVING": "Home Health reflects contribution coverage, shared expenses, and living activity for this household Moment."
+      }
+    },
+    "PULSE-004": {
+      "title": "Progress",
+      "what": "Shows how far this Group Moment has progressed against its plan.",
+      "why": "Helps you see whether the group is on track.",
+      "how": {
+        "default": "Progress percent from tasks, milestones, activities, or funding completion for this Moment type.",
+        "SHARED_EXPERIENCE": "Readiness / trip progress from itinerary and experience completion signals.",
+        "SHARED_PURCHASE": "Funding progress is collected ÷ target for the shared purchase.",
+        "SHARED_LIVING": "Coverage reflects contributions against shared living costs."
+      }
+    },
+    "PULSE-005": {
+      "title": "Participation",
+      "what": "Measures member engagement and contribution in this Group Moment.",
+      "why": "Highlights collaboration health and who is showing up.",
+      "how": {
+        "default": "Participation score from member activity, contributions, and task completion for this Moment.",
+        "SHARED_EXPERIENCE": "Engagement from trip activities, attendance, and shared experience events."
+      }
+    },
+    "PULSE-006": {
+      "title": "Attention signals",
+      "what": "Highlights the highest-priority issues or pending actions right now.",
+      "why": "Helps the group focus on what needs attention first.",
+      "how": {
+        "default": "Prioritised cards from risks, pending tasks, money alerts, and AI attention rules for this Moment."
+      }
+    },
+    "PULSE-007": {
+      "title": "Recent activity",
+      "what": "Lists the latest activities, transactions, and updates in this Group Moment.",
+      "why": "Shows what changed recently without jumping across screens.",
+      "how": {
+        "default": "Newest-first feed from the group activity timeline—expenses, tasks, contributions, and decisions."
+      }
+    },
+    "PULSE-008": {
+      "title": "Next best action",
+      "what": "Recommends the single highest-impact next step for this Group Moment.",
+      "why": "Cuts decision fatigue by pointing to the most valuable action.",
+      "how": {
+        "default": "Chosen from health, pending work, and money state—shown with expected impact when available."
+      }
+    },
+    "PULSE-009": {
+      "title": "AI insights",
+      "what": "Shows AI observations from patterns, trends, and group behaviour.",
+      "why": "Surfaces insights that are easy to miss in raw activity lists.",
+      "how": {
+        "default": "Insight cards from group analytics on activities, participation, and money history for this Moment."
+      }
+    },
+    "MOMENT-002": {
+      "title": "People & roles",
+      "what": "Shows who is in this Group Moment and their roles.",
+      "why": "Makes ownership and participation clear for everyone.",
+      "how": {
+        "default": "Member list, roles, and invite status from group membership for this Moment."
+      }
+    },
+    "MOMENT-003": {
+      "title": "Money status",
+      "what": "Summarises the financial position of this Group Moment.",
+      "why": "Gives money visibility without opening full finance screens.",
+      "how": {
+        "default": "Totals from expenses, contributions, budgets, and settlements for this Moment.",
+        "SHARED_EXPERIENCE": "Trip spend and shared expense totals for the experience.",
+        "SHARED_PURCHASE": "Target, collected, remaining, and spent for the purchase pool.",
+        "SHARED_LIVING": "Shared household spend and contribution balances."
+      }
+    },
+    "MOMENT-004": {
+      "title": "Activity & operations",
+      "what": "Shows the operational workload—tasks, milestones, and related work.",
+      "why": "Helps you see progress and what is still pending.",
+      "how": {
+        "default": "Counts from tasks, activities, milestones, and ops items for this Moment."
+      }
+    },
+    "MOMENT-005": {
+      "title": "Assets & resources",
+      "what": "Shows documents, assets, and shared resources for this Moment.",
+      "why": "Keeps supporting materials easy to find for everyone.",
+      "how": {
+        "default": "Resource counts and categories from attachments and shared resources linked to this Moment."
+      }
+    },
+    "MOMENT-006": {
+      "title": "Decisions & governance",
+      "what": "Shows decisions, approvals, polls, and governance items.",
+      "why": "Keeps important group decisions visible to all participants.",
+      "how": {
+        "default": "Latest governance items and statuses from decisions, polls, and approvals for this Moment."
+      }
+    },
+    "MOMENT-007": {
+      "title": "Current state snapshot",
+      "what": "AI summary of the current operating stage and focus areas.",
+      "why": "Helps the group align on what matters most right now.",
+      "how": {
+        "default": "Generated from current progress, participation, money, and pending decisions for this Moment."
+      }
+    },
+    "MOMENT-ITINERARY": {
+      "title": "Itinerary",
+      "what": "Shows planned itinerary or schedule items for the shared experience.",
+      "why": "Keeps the trip plan visible in one place.",
+      "how": {
+        "default": "Itinerary entries linked to this shared experience Moment."
+      }
+    },
+    "MOMENT-GRID": {
+      "title": "Moments grid",
+      "what": "Shows highlighted moment cards from this group journey.",
+      "why": "Makes notable experiences easy to browse.",
+      "how": {
+        "default": "Cards from moments/highlights recorded for this Group Moment."
+      }
+    },
+    "MOMENT-UPCOMING": {
+      "title": "Upcoming events",
+      "what": "Lists upcoming events on the group timeline.",
+      "why": "Helps members see what is next.",
+      "how": {
+        "default": "Upcoming dated events from the experience schedule for this Moment."
+      }
+    },
+    "MEMORY-001": {
+      "title": "Memory timeline",
+      "what": "Shows the chronological history of important group events and milestones.",
+      "why": "Preserves the journey so the group can revisit how it unfolded.",
+      "how": {
+        "default": "Timeline entries from activities, money events, tasks, milestones, and memory events—newest first."
+      }
+    },
+    "MEMORY-002": {
+      "title": "Milestone wall",
+      "what": "Highlights major achievements completed during this Group Moment.",
+      "why": "Makes defining accomplishments easy to recognise.",
+      "how": {
+        "default": "Milestone cards with completion status and dates from the group progress engine."
+      }
+    },
+    "MEMORY-003": {
+      "title": "People impact",
+      "what": "Ranks members who contributed the most positive impact.",
+      "why": "Recognises meaningful participation across the journey.",
+      "how": {
+        "default": "Impact scores from participation, contributions, tasks, and money activity over the Moment."
+      }
+    },
+    "MEMORY-004": {
+      "title": "Memory gallery",
+      "what": "Shows photos, files, and media preserved for this Group Moment.",
+      "why": "Keeps shared memories beyond day-to-day activity.",
+      "how": {
+        "default": "Gallery previews and counts from attachments and media linked to this Moment."
+      }
+    },
+    "MEMORY-007": {
+      "title": "Memory highlights",
+      "what": "Shows the most meaningful memories and defining moments.",
+      "why": "Keeps the highest-value experiences easy to find.",
+      "how": {
+        "default": "Highlight cards ranked by significance from timeline, milestones, and gallery signals."
+      }
+    },
+    "MEMORY-010": {
+      "title": "Memory intelligence",
+      "what": "AI insight combining history, behaviour, and lessons from this Group Moment.",
+      "why": "Turns accumulated history into knowledge for future groups.",
+      "how": {
+        "default": "Intelligence summary from the full memory history, behaviour, and lessons for this Moment."
+      }
+    },
+    "LIFE-002": {
+      "title": "Balance model",
+      "what": "Shows how balanced major Group Life dimensions are relative to each other.",
+      "why": "Helps you spot uneven progress across group life areas.",
+      "how": {
+        "default": "Dimension scores for Experience, Purchase, Living (and related life dimensions) from the life balance model."
+      }
+    },
+    "LIFE-003": {
+      "title": "What drives your group",
+      "what": "Identifies which Group Moments contribute the most positive impact.",
+      "why": "Shows which Moments most influence overall Group Life.",
+      "how": {
+        "default": "Ranked Moments with influence from cross-moment and network-effect signals in Group Life."
+      }
+    },
+    "LIFE-005": {
+      "title": "Highest leverage moment",
+      "what": "Highlights the Group Moment with the greatest ability to lift overall Group Life.",
+      "why": "Focuses attention where effort compounds most.",
+      "how": {
+        "default": "Selected from cross-moment leverage analysis in the Group Life projection."
+      }
+    },
+    "LIFE-006": {
+      "title": "Evolution timeline",
+      "what": "Shows how Group Life has evolved over time.",
+      "why": "Highlights long-term growth beyond today’s score.",
+      "how": {
+        "default": "Historical trend lines from life and pulse snapshots over time."
+      }
+    },
+    "LIFE-007": {
+      "title": "What changed this month",
+      "what": "Summarises the biggest improvements and changes across Group Life this month.",
+      "why": "Makes recent progress easy to scan.",
+      "how": {
+        "default": "Month-over-month changes from Group Life monthly analytics."
+      }
+    },
+    "LIFE-008": {
+      "title": "Group journey",
+      "what": "Shows maturity and progression of major Group Moment categories.",
+      "why": "Helps you see how different parts of Group Life are developing.",
+      "how": {
+        "default": "Journey stages per category from Group Moments progress and journey engines."
+      }
+    },
+    "LIFE-009": {
+      "title": "Intelligence reflection",
+      "what": "AI reflection with the most meaningful insight across Group Life.",
+      "why": "Turns complex cross-moment data into one takeaway.",
+      "how": {
+        "default": "Reflection text from Group Life intelligence based on latest patterns and network effects."
+      }
+    }
+  }
+}

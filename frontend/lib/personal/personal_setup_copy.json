@@ -1,0 +1,479 @@
+{
+  "catalog_version": 1,
+  "template_version": 1,
+  "setup_version": 1,
+  "estimated_minutes": 3,
+  "templates": {
+    "life_operations": {
+      "title": "Life Operations Setup",
+      "subtitle": "Align your rhythm and what restores you.",
+      "activate_cta": "Begin My New Rhythm",
+      "activation_success": "Life Operations activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Moment basics",
+          "short_title": "Basics",
+          "shortTitle": "Basics",
+          "description": "How does life feel right now, and where do you want to go?",
+          "fields": [
+            {
+              "key": "current_life_state",
+              "field_key": "current_life_state",
+              "label": "How does life feel right now?",
+              "control": "cards",
+              "summary_label": "State",
+              "options": [
+                { "value": "MOSTLY_STABLE", "label": "Mostly stable" },
+                { "value": "OVERWHELMING", "label": "Overwhelming" },
+                { "value": "VERY_BUSY", "label": "Very busy" },
+                { "value": "UNPREDICTABLE", "label": "Unpredictable" },
+                { "value": "TRYING_TO_RESET", "label": "Trying to reset" },
+                { "value": "BUILDING_MOMENTUM", "label": "Building momentum" }
+              ]
+            },
+            {
+              "key": "desired_directions",
+              "field_key": "desired_directions",
+              "label": "What do you want more of?",
+              "control": "multi_chips",
+              "options": [
+                { "value": "CALMNESS", "label": "Calmness" },
+                { "value": "STRUCTURE", "label": "Structure" },
+                { "value": "ENERGY", "label": "Energy" },
+                { "value": "RECOVERY", "label": "Recovery" },
+                { "value": "FOCUS", "label": "Focus" },
+                { "value": "STABILITY", "label": "Stability" },
+                { "value": "FLEXIBILITY", "label": "Flexibility" },
+                { "value": "MOMENTUM", "label": "Momentum" }
+              ]
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "preferences",
+          "title": "Preferences and goals",
+          "short_title": "Preferences",
+          "shortTitle": "Preferences",
+          "description": "Name the pressures and supports that shape your days.",
+          "fields": [
+            {
+              "key": "pressure_sources",
+              "field_key": "pressure_sources",
+              "label": "What creates pressure?",
+              "control": "multi_chips",
+              "options": [
+                { "value": "COMMITMENTS", "label": "Commitments" },
+                { "value": "MONEY", "label": "Money" },
+                { "value": "NO_ROUTINE", "label": "No routine" },
+                { "value": "BURNOUT", "label": "Burnout" },
+                { "value": "OVERLOAD", "label": "Overload" },
+                { "value": "TASKS", "label": "Tasks" },
+                { "value": "NO_RECOVERY", "label": "No recovery" },
+                { "value": "CHANGE", "label": "Change" }
+              ]
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "habits",
+          "title": "Habits and recovery",
+          "short_title": "Habits",
+          "shortTitle": "Habits",
+          "description": "What restores you when life gets loud?",
+          "optional": true,
+          "fields": [
+            {
+              "key": "recovery_supports",
+              "field_key": "recovery_supports",
+              "label": "What restores you?",
+              "control": "multi_chips",
+              "options": [
+                { "value": "QUIET_TIME", "label": "Quiet time" },
+                { "value": "WALKS", "label": "Walks" },
+                { "value": "SLEEP", "label": "Sleep" },
+                { "value": "REFLECTION", "label": "Reflection" },
+                { "value": "EXERCISE", "label": "Exercise" },
+                { "value": "PEOPLE", "label": "People" },
+                { "value": "FLEXIBILITY", "label": "Flexibility" },
+                { "value": "FINANCIAL_CLARITY", "label": "Financial clarity" }
+              ]
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "short_title": "Review",
+          "shortTitle": "Review",
+          "description": "Confirm your rhythm, then begin."
+        }
+      ]
+    },
+    "future_building": {
+      "title": "Future Building Setup",
+      "subtitle": "Set the direction you want your future to move.",
+      "activate_cta": "Activate Future Building",
+      "activation_success": "Future Building activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Building basics",
+          "short_title": "Basics",
+          "shortTitle": "Basics",
+          "description": "What are you building, and where are you today?",
+          "fields": [
+            {
+              "key": "building_focus",
+              "field_key": "building_focus",
+              "label": "What are you building?",
+              "control": "chips",
+              "options": [
+                { "value": "CAREER_GROWTH", "label": "Career growth" },
+                { "value": "BUSINESS_GROWTH", "label": "Business growth" },
+                { "value": "FINANCIAL_FREEDOM", "label": "Financial freedom" },
+                { "value": "LEARNING_SKILLS", "label": "Learning and skills" },
+                { "value": "CREATIVE_PROJECT", "label": "Creative project" },
+                { "value": "PERSONAL_REINVENTION", "label": "Personal reinvention" }
+              ]
+            },
+            {
+              "key": "current_state",
+              "field_key": "current_state",
+              "label": "Where are you today?",
+              "control": "chips",
+              "options": [
+                { "value": "JUST_STARTING", "label": "Just starting" },
+                { "value": "EXPLORING_OPTIONS", "label": "Exploring options" },
+                { "value": "MAKING_PROGRESS", "label": "Making progress" },
+                { "value": "BUILDING_MOMENTUM", "label": "Building momentum" }
+              ]
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "preferences",
+          "title": "Preferences and goals",
+          "short_title": "Goals",
+          "shortTitle": "Goals",
+          "description": "What matters most, and what slows you down?",
+          "fields": [
+            {
+              "key": "values",
+              "field_key": "values",
+              "label": "What matters most?",
+              "control": "multi_chips",
+              "options": [
+                { "value": "GROWTH", "label": "Growth" },
+                { "value": "FREEDOM", "label": "Freedom" },
+                { "value": "IMPACT", "label": "Impact" },
+                { "value": "SECURITY", "label": "Security" },
+                { "value": "PURPOSE", "label": "Purpose" }
+              ]
+            },
+            {
+              "key": "friction_sources",
+              "field_key": "friction_sources",
+              "label": "What slows you down?",
+              "control": "multi_chips",
+              "options": [
+                { "value": "LACK_OF_TIME", "label": "Lack of time" },
+                { "value": "LACK_OF_CLARITY", "label": "Lack of clarity" },
+                { "value": "DISTRACTIONS", "label": "Distractions" },
+                { "value": "BURNOUT", "label": "Burnout" }
+              ]
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "momentum",
+          "title": "Momentum and outlook",
+          "short_title": "Momentum",
+          "shortTitle": "Momentum",
+          "description": "What accelerates progress, and how does the future feel?",
+          "fields": [
+            {
+              "key": "momentum_drivers",
+              "field_key": "momentum_drivers",
+              "label": "What accelerates progress?",
+              "control": "multi_chips",
+              "options": [
+                { "value": "DAILY_PROGRESS", "label": "Daily progress" },
+                { "value": "LEARNING", "label": "Learning" },
+                { "value": "FOCUS_TIME", "label": "Focus time" },
+                { "value": "ROUTINE", "label": "Routine" }
+              ]
+            },
+            {
+              "key": "future_feeling",
+              "field_key": "future_feeling",
+              "label": "How does the future feel?",
+              "control": "chips",
+              "options": [
+                { "value": "EXCITING", "label": "Exciting" },
+                { "value": "HOPEFUL", "label": "Hopeful" },
+                { "value": "CONFIDENT", "label": "Confident" },
+                { "value": "UNCLEAR", "label": "Unclear" },
+                { "value": "STUCK", "label": "Stuck" },
+                { "value": "OVERWHELMING", "label": "Overwhelming" }
+              ]
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "short_title": "Review",
+          "shortTitle": "Review",
+          "description": "Confirm your direction, then activate Future Building."
+        }
+      ]
+    },
+    "lifestyle": {
+      "title": "Lifestyle Setup",
+      "subtitle": "Shape the lifestyle you want to live.",
+      "activate_cta": "Activate My Lifestyle",
+      "activation_success": "Lifestyle activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Lifestyle basics",
+          "short_title": "Basics",
+          "shortTitle": "Basics",
+          "description": "Name this moment and the lifestyle you are aiming for.",
+          "fields": [
+            {
+              "key": "moment_name",
+              "field_key": "moment_name",
+              "label": "What should we call this moment?",
+              "control": "text",
+              "maxLength": 60
+            },
+            {
+              "key": "lifestyle_vision",
+              "field_key": "lifestyle_vision",
+              "label": "What lifestyle are you aiming for?",
+              "control": "textarea",
+              "optional": true
+            },
+            {
+              "key": "current_lifestyle",
+              "field_key": "current_lifestyle",
+              "label": "How would you describe life today?",
+              "control": "textarea",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "preferences",
+          "title": "Preferences and balance",
+          "short_title": "Balance",
+          "shortTitle": "Balance",
+          "description": "Health, habits, work-life balance, home, and social energy.",
+          "fields": [
+            {
+              "key": "health_energy",
+              "field_key": "health_energy",
+              "label": "Health and energy",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "daily_habits",
+              "field_key": "daily_habits",
+              "label": "Daily habits that matter",
+              "control": "multi_chips",
+              "optional": true
+            },
+            {
+              "key": "work_life_balance",
+              "field_key": "work_life_balance",
+              "label": "Work–life balance",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "relationships_social",
+              "field_key": "relationships_social",
+              "label": "Relationships and social energy",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "home_environment",
+              "field_key": "home_environment",
+              "label": "Home environment",
+              "control": "chips",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "priorities",
+          "title": "Priorities and focus",
+          "short_title": "Priorities",
+          "shortTitle": "Priorities",
+          "description": "What to protect, what has been neglected, and future lifestyle goals.",
+          "fields": [
+            {
+              "key": "personal_priorities",
+              "field_key": "personal_priorities",
+              "label": "What are you prioritizing?",
+              "control": "multi_chips"
+            },
+            {
+              "key": "neglected",
+              "field_key": "neglected",
+              "label": "What has been neglected?",
+              "control": "multi_chips"
+            },
+            {
+              "key": "future_lifestyle_goals",
+              "field_key": "future_lifestyle_goals",
+              "label": "Future lifestyle goals",
+              "control": "multi_chips"
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "short_title": "Review",
+          "shortTitle": "Review",
+          "description": "Confirm your lifestyle setup, then activate."
+        }
+      ]
+    },
+    "relationships": {
+      "title": "Relationships Setup",
+      "subtitle": "Clarify relationship focus and what you want more of.",
+      "activate_cta": "Activate My Relationships",
+      "activation_success": "Relationships activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Relationship basics",
+          "short_title": "Basics",
+          "shortTitle": "Basics",
+          "description": "What relationship area are you focusing on?",
+          "fields": [
+            {
+              "key": "relationship_focus",
+              "field_key": "relationship_focus",
+              "label": "What is your relationship focus?",
+              "control": "chips"
+            },
+            {
+              "key": "current_state",
+              "field_key": "current_state",
+              "label": "How do things feel today?",
+              "control": "chips"
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "circles",
+          "title": "People and circles",
+          "short_title": "Circles",
+          "shortTitle": "Circles",
+          "description": "Family, partner, friends, work network, and community — as they apply to you.",
+          "fields": [
+            {
+              "key": "family",
+              "field_key": "family",
+              "label": "Family",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "partner",
+              "field_key": "partner",
+              "label": "Partner",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "friends",
+              "field_key": "friends",
+              "label": "Friends",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "professional_network",
+              "field_key": "professional_network",
+              "label": "Professional network",
+              "control": "chips",
+              "optional": true
+            },
+            {
+              "key": "community",
+              "field_key": "community",
+              "label": "Community",
+              "control": "chips",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "investment",
+          "title": "Strengths and investment",
+          "short_title": "Invest",
+          "shortTitle": "Invest",
+          "description": "What strengthens relationships, where to invest, and what you want more of.",
+          "fields": [
+            {
+              "key": "strength_drivers",
+              "field_key": "strength_drivers",
+              "label": "What strengthens your relationships?",
+              "control": "multi_chips"
+            },
+            {
+              "key": "investment_areas",
+              "field_key": "investment_areas",
+              "label": "Where do you want to invest?",
+              "control": "multi_chips"
+            },
+            {
+              "key": "want_more",
+              "field_key": "want_more",
+              "label": "What do you want more of?",
+              "control": "multi_chips"
+            },
+            {
+              "key": "neglected",
+              "field_key": "neglected",
+              "label": "What has been neglected?",
+              "control": "multi_chips",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "short_title": "Review",
+          "shortTitle": "Review",
+          "description": "Confirm your relationship focus, then activate."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "moment_id": "00000000-0000-4000-8000-000000000003",
+  "moment_type": "SHARED_LIVING",
+  "moment_name": "Flat 4B",
+  "currency_code": "INR",
+  "pulse_data": {
+    "active_members": 0,
+    "completion_percentage": 0,
+    "currency_code": "INR",
+    "stats": {
+      "residents": 0,
+      "expenses_minor": 0
+    }
+  },
+  "health_data": { "health_score": 0 },
+  "signals": [],
+  "recommendations": [],
+  "recent_events": []
+}

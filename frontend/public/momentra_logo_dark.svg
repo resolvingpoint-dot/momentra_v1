@@ -1,0 +1,29 @@
+<svg width="300" height="100" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="emb" x1="0" y1="1" x2="1" y2="0">
+    <stop offset="0%" stop-color="#E8621A"/>
+    <stop offset="100%" stop-color="#F5A623"/>
+  </linearGradient>
+</defs>
+<!-- Left peak ghost stroke -->
+<path d="M12,88 L12,46 L28,68 L44,24 L44,88" fill="none" stroke="#F5F0FF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.15"/>
+<!-- 5 people dots — left peak -->
+<circle cx="12" cy="88" r="5.5" fill="#F5F0FF"/>
+<circle cx="12" cy="54" r="5.5" fill="#F5F0FF"/>
+<circle cx="28" cy="68" r="5.5" fill="#F5F0FF"/>
+<circle cx="44" cy="32" r="5.5" fill="#F5F0FF"/>
+<circle cx="44" cy="88" r="5.5" fill="#F5F0FF"/>
+<!-- Right peak ember gradient -->
+<path d="M44,88 L44,32 L60,68 L76,32 L78,88" fill="none" stroke="url(#emb)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+<!-- Liftoff arc -->
+<path d="M76,32 Q80,21 85,17" fill="none" stroke="#F5A623" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+<!-- Spark dot -->
+<circle cx="86" cy="15" r="7" fill="#F5A623"/>
+<circle cx="86" cy="15" r="3.8" fill="#E8621A"/>
+<!-- Wordmark -->
+<text x="108" y="64" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="36" font-weight="500" letter-spacing="-0.5"><tspan fill="#F5F0FF">momentr</tspan><tspan fill="#E8621A">a</tspan></text>
+<!-- Floating dot above 'a' -->
+<circle cx="245" cy="26" r="4.5" fill="#F5A623"/>
+<!-- Tagline -->
+<text x="108" y="82" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" fill="rgba(245,240,255,0.4)" letter-spacing="3">TOGETHER · FORWARD</text>
+</svg>

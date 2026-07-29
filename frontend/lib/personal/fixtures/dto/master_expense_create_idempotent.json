@@ -1,0 +1,35 @@
+{
+  "id": "00000000-0000-4000-8000-0000000000aa",
+  "master_expense_id": "00000000-0000-4000-8000-0000000000aa",
+  "created_events": {
+    "life_operations": "00000000-0000-4000-8000-0000000000bb",
+    "lifestyle": "00000000-0000-4000-8000-0000000000cc",
+    "relationships": null
+  },
+  "impact_preview": {
+    "life_operations": "Will refresh Life Ops Pulse & Activity",
+    "lifestyle": "Will refresh Lifestyle Pulse & Moments",
+    "relationships": "Skipped (not shared)",
+    "templates_touched": "2",
+    "will_refresh": "Pulse & Activity on touched templates"
+  },
+  "idempotent_replay": true,
+  "master_expense_group_id": "00000000-0000-4000-8000-0000000000aa",
+  "transaction_id": "00000000-0000-4000-8000-0000000000bb",
+  "account_id": "00000000-0000-4000-8000-0000000000dd",
+  "amount_minor": 10000,
+  "events": [
+    {
+      "quick_add_event_id": "00000000-0000-4000-8000-0000000000bb",
+      "moment_id": "00000000-0000-4000-8000-0000000000ee",
+      "moment_type_code": "LIFE_OPERATIONS",
+      "event_type": "EXPENSE"
+    },
+    {
+      "quick_add_event_id": "00000000-0000-4000-8000-0000000000cc",
+      "moment_id": "00000000-0000-4000-8000-0000000000ff",
+      "moment_type_code": "LIFESTYLE",
+      "event_type": "EXPERIENCE"
+    }
+  ]
+}

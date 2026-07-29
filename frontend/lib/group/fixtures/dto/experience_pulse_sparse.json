@@ -1,0 +1,23 @@
+{
+  "moment_id": "00000000-0000-4000-8000-000000000001",
+  "moment_type": "SHARED_EXPERIENCE",
+  "moment_profile": "TRIP_VACATION",
+  "moment_name": "Untitled moment",
+  "status": "ACTIVE",
+  "stage": "planning",
+  "pulse_data": {
+    "active_members": 0,
+    "confirmed_bookings": 0,
+    "active_tasks": 0,
+    "completion_percentage": 0,
+    "currency_code": "INR",
+    "stats": {}
+  },
+  "health_data": {
+    "health_score": 0,
+    "health_status": "No score yet"
+  },
+  "signals": [],
+  "recommendations": [],
+  "recent_events": []
+}

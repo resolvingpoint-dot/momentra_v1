@@ -1,0 +1,123 @@
+[data-momentra-context="business"] {
+  /* ───── Founder Command Center (Business) ───── */
+  /* Deep cinematic navy surfaces + multi-accent operational dimensions */
+
+  /* ───── Ground & Surfaces ───── */
+  --color-background:              #0b1020;
+  --color-on-background:           #ffffff;
+  --color-surface:                 #0b1020;
+  --color-surface-dim:             #080c18;
+  --color-surface-bright:          #1e243d;
+  --color-surface-variant:         #161b2e;
+  --color-surface-secondary:       #1e243d;
+  --color-surface-container-lowest:#0b1020;
+  --color-surface-container-low:   #12182c;
+  --color-surface-container:       #161b2e;
+  --color-surface-container-high:  #1a2036;
+  --color-surface-container-highest:#1e243d;
+
+  /* ───── Brand Indigo ───── */
+  --color-primary:                 #5b5ceb;
+  --color-on-primary:              #ffffff;
+  --color-primary-container:       #252654;
+  --color-on-primary-container:    #c7c8ff;
+  --color-secondary:               #a1a7c1;
+  --color-on-secondary:            #0b1020;
+  --color-secondary-container:     #1e243d;
+  --color-on-secondary-container:  #ffffff;
+  --color-tertiary:                #10b981;
+  --color-on-tertiary:             #0b1020;
+  --color-tertiary-container:      #0f3329;
+  --color-on-tertiary-container:   #6ee7b7;
+  --color-surface-tint:            #5b5ceb;
+
+  /* ───── Text ───── */
+  --color-on-surface:              #ffffff;
+  --color-on-surface-variant:      #a1a7c1;
+  --color-inverse-surface:         #ffffff;
+  --color-inverse-on-surface:      #0b1020;
+
+  /* ───── Outline / Dividers ───── */
+  --color-outline:                 #2d3554;
+  --color-outline-variant:         #232a45;
+  --color-divider:                 #2d3554;
+
+  /* ───── Semantic ───── */
+  --color-error:                   #f87171;
+  --color-on-error:                #0b1020;
+  --color-error-container:         #3f1515;
+  --color-on-error-container:      #fecaca;
+  --color-success:                 #10b981;
+  --color-warning:                 #f59e0b;
+
+  /* ───── Operational dimensions ───── */
+  --color-dimension-team-main:         #5b5ceb;
+  --color-dimension-team-soft-tint:    #252654;
+  --color-dimension-team-glow:         rgba(91, 92, 235, 0.25);
+  --color-dimension-project-main:      #00ced1;
+  --color-dimension-project-soft-tint: #0a3234;
+  --color-dimension-project-glow:      rgba(0, 206, 209, 0.25);
+  --color-dimension-event-main:        #f59e0b;
+  --color-dimension-event-soft-tint:   #3a2d14;
+  --color-dimension-event-glow:        rgba(245, 158, 11, 0.25);
+  --color-dimension-runway-main:       #10b981;
+  --color-dimension-runway-soft-tint:  #0f3329;
+  --color-dimension-runway-glow:       rgba(16, 185, 129, 0.25);
+  --color-dimension-department-main:       #f97316;
+  --color-dimension-department-soft-tint:  #3a2214;
+  --color-dimension-department-glow:   rgba(249, 115, 22, 0.25);
+  --color-dimension-vendor-main:       #8b5cf6;
+  --color-dimension-vendor-soft-tint:  #2a2045;
+  --color-dimension-vendor-glow:       rgba(139, 92, 246, 0.25);
+  --color-dimension-custom-main:       #5b5ceb;
+  --color-dimension-custom-soft-tint:  #252654;
+  --color-dimension-custom-glow:       rgba(91, 92, 235, 0.25);
+
+  /* ───── Component sizes ───── */
+  --size-button-height:            40px;
+  --size-table-row:                48px;
+  --size-table-row-comfortable:    56px;
+  --size-status-dot:               8px;
+  --size-dimensional-bar:          4px;
+
+  /* ───── Elevation / glow ───── */
+  --elevation-card-shadow:         0px 0px 12px rgba(91, 92, 235, 0.12);
+  --elevation-popover-shadow:      0px 8px 24px rgba(91, 92, 235, 0.2);
+  --elevation-accent-glow-blur-min: 8px;
+  --elevation-accent-glow-blur-max: 16px;
+  --elevation-accent-glow-opacity-min: 0.2;
+  --elevation-accent-glow-opacity-max: 0.3;
+
+  /* ───── Fonts ───── */
+  --font-sans:                     "Inter", "Plus Jakarta Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-label:                    "Inter", "Plus Jakarta Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* ───── Typography roles ───── */
+  --text-display:                  700 40px/48px var(--font-sans);
+  --text-headline-lg:              600 32px/40px var(--font-sans);
+  --text-headline-md:              600 24px/32px var(--font-sans);
+  --text-headline-sm:              600 20px/28px var(--font-sans);
+  --text-body-lg:                  400 16px/24px var(--font-sans);
+  --text-body-md:                  400 14px/20px var(--font-sans);
+  --text-body-sm:                  400 12px/16px var(--font-sans);
+  --text-label-md:                 500 12px/16px var(--font-label);
+  --text-label-sm:                 500 10px/12px var(--font-label);
+
+  /* ───── Spacing (4px baseline) ───── */
+  --spacing-unit:                  4px;
+  --spacing-xs:                    4px;
+  --spacing-sm:                    8px;
+  --spacing-md:                    16px;
+  --spacing-lg:                    24px;
+  --spacing-xl:                    32px;
+  --spacing-gutter:                16px;
+  --spacing-container-margin:      24px;
+
+  /* ───── Radii (ROUND_EIGHT — 8–12px cards) ───── */
+  --radius-sm:                     4px;
+  --radius-default:                8px;
+  --radius-md:                     8px;
+  --radius-lg:                     12px;
+  --radius-xl:                     12px;
+  --radius-pill:                   9999px;
+}

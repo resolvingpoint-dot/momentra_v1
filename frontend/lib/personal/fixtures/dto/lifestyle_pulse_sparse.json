@@ -1,0 +1,24 @@
+{
+  "vitality_index": 0,
+  "vitality_delta_month": null,
+  "status_band": "UNKNOWN",
+  "axis_scores": { "joy": 0, "fulfillment": 0, "vitality": 0, "exploration": 0 },
+  "capacity": {
+    "lifestyle_spend_minor": 0,
+    "experience_count": 0,
+    "discovery_count": 0,
+    "creative_session_count": 0
+  },
+  "signals": [],
+  "financial_segments": [],
+  "trends_30d": { "joy": [], "vitality": [] },
+  "score_drivers": [],
+  "gauges": [],
+  "opportunity": {
+    "priority_id": "none",
+    "title": "",
+    "body": "",
+    "cta_label": ""
+  },
+  "intelligence": { "pattern_id": "none", "confidence_percent": 0, "quote": "" }
+}

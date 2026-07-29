@@ -1,0 +1,595 @@
+{
+  "catalog_version": 1,
+  "template_version": 1,
+  "setup_version": 1,
+  "version": "1.0",
+  "estimated_minutes": 3,
+  "shared": {
+    "regional_section": {
+      "title": "Regional settings",
+      "helper": "Defaults come from your profile or device. You can change them anytime."
+    },
+    "operating_currency": {
+      "label": "Operating currency",
+      "helper": "Amounts and reports use this currency.",
+      "control": "search_picker"
+    },
+    "country_code": {
+      "label": "Country",
+      "control": "search_picker"
+    },
+    "locale": {
+      "label": "Language and format",
+      "control": "search_picker"
+    },
+    "timezone": {
+      "label": "Timezone",
+      "control": "search_picker"
+    }
+  },
+  "choices": {
+    "team_size": [
+      { "value": "SOLO", "label": "Just me", "icon": "person" },
+      { "value": "SMALL", "label": "2–5", "icon": "group" },
+      { "value": "MEDIUM", "label": "6–15", "icon": "groups" },
+      { "value": "LARGE", "label": "16–50", "icon": "diversity" },
+      { "value": "XLARGE", "label": "50+", "icon": "business" }
+    ],
+    "work_style": [
+      { "value": "REMOTE", "label": "Remote", "icon": "public" },
+      { "value": "HYBRID", "label": "Hybrid", "icon": "swap" },
+      { "value": "IN_PERSON", "label": "Office", "icon": "apartment" }
+    ],
+    "coordination_style": [
+      { "value": "INDEPENDENT", "label": "Independent" },
+      { "value": "CROSS_FUNCTIONAL", "label": "Cross-functional" },
+      { "value": "LEADERSHIP_DRIVEN", "label": "Leadership-driven" },
+      { "value": "SHARED_OWNERSHIP", "label": "Shared ownership" }
+    ],
+    "team_monitoring_level": [
+      { "value": "BASIC", "label": "Light", "description": "Important updates only" },
+      { "value": "STANDARD", "label": "Standard", "description": "Regular monitoring" },
+      { "value": "HIGH_VISIBILITY", "label": "Detailed", "description": "More frequent alerts" }
+    ],
+    "review_cycle": [
+      { "value": "WEEKLY", "label": "Weekly" },
+      { "value": "BIWEEKLY", "label": "Biweekly" },
+      { "value": "MONTHLY", "label": "Monthly" },
+      { "value": "QUARTERLY", "label": "Quarterly" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "visibility_team": [
+      { "value": "PRIVATE", "label": "Private" },
+      { "value": "TEAM", "label": "Team" },
+      { "value": "ORG", "label": "Organization" }
+    ],
+    "visibility_leadership": [
+      { "value": "PRIVATE", "label": "Private" },
+      { "value": "TEAM", "label": "Team" },
+      { "value": "LEADERSHIP", "label": "Leadership" },
+      { "value": "ORGANIZATION", "label": "Organization" }
+    ],
+    "business_stage": [
+      { "value": "IDEA", "label": "Idea" },
+      { "value": "PRE_REVENUE", "label": "Pre-revenue" },
+      { "value": "EARLY_REVENUE", "label": "Early revenue" },
+      { "value": "GROWTH", "label": "Growth" },
+      { "value": "MATURE", "label": "Mature" },
+      { "value": "TURNAROUND", "label": "Turnaround" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "revenue_status": [
+      { "value": "NO_REVENUE", "label": "No revenue yet" },
+      { "value": "EARLY_REVENUE", "label": "Early revenue" },
+      { "value": "RECURRING_REVENUE", "label": "Recurring revenue" },
+      { "value": "VARIABLE_REVENUE", "label": "Variable revenue" },
+      { "value": "PROFITABLE", "label": "Profitable" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "revenue_model": [
+      { "value": "SUBSCRIPTION", "label": "Subscription" },
+      { "value": "TRANSACTIONAL", "label": "Transactional" },
+      { "value": "SERVICES", "label": "Services" },
+      { "value": "RETAIL", "label": "Retail" },
+      { "value": "MARKETPLACE", "label": "Marketplace" },
+      { "value": "LICENSING", "label": "Licensing" },
+      { "value": "ADVERTISING", "label": "Advertising" },
+      { "value": "MIXED", "label": "Mixed" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "funding_sources": [
+      { "value": "BOOTSTRAPPED", "label": "Bootstrapped" },
+      { "value": "FOUNDER_CAPITAL", "label": "Founder capital" },
+      { "value": "FRIENDS_FAMILY", "label": "Friends and family" },
+      { "value": "ANGEL", "label": "Angel investment" },
+      { "value": "VC", "label": "Venture capital" },
+      { "value": "DEBT", "label": "Business loan or debt" },
+      { "value": "GRANT", "label": "Grant" },
+      { "value": "REVENUE_FUNDED", "label": "Revenue-funded" },
+      { "value": "OTHER", "label": "Other" }
+    ],
+    "burn_categories": [
+      { "value": "PAYROLL", "label": "Payroll" },
+      { "value": "RENT", "label": "Rent and facilities" },
+      { "value": "SOFTWARE", "label": "Software and tools" },
+      { "value": "MARKETING", "label": "Marketing" },
+      { "value": "OPERATIONS", "label": "Operations" },
+      { "value": "OTHER", "label": "Other" }
+    ],
+    "runway_goal_presets": [
+      { "value": "6", "label": "6" },
+      { "value": "12", "label": "12" },
+      { "value": "18", "label": "18" },
+      { "value": "24", "label": "24" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "alert_threshold_presets": [
+      { "value": "3", "label": "3 months" },
+      { "value": "6", "label": "6 months" },
+      { "value": "9", "label": "9 months" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "operations_scope": [
+      { "value": "GENERAL_OPERATIONS", "label": "General operations" },
+      { "value": "DEPARTMENT", "label": "Department" },
+      { "value": "PROJECT_PORTFOLIO", "label": "Project portfolio" },
+      { "value": "VENDOR_OPERATIONS", "label": "Vendor operations" },
+      { "value": "RETAIL_OPERATIONS", "label": "Retail operations" },
+      { "value": "SERVICE_OPERATIONS", "label": "Service operations" },
+      { "value": "MANUFACTURING_OPERATIONS", "label": "Manufacturing operations" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "operating_model": [
+      { "value": "CENTRALIZED", "label": "Centralized" },
+      { "value": "DECENTRALIZED", "label": "Decentralized" },
+      { "value": "HYBRID", "label": "Hybrid" },
+      { "value": "PROJECT_BASED", "label": "Project-based" },
+      { "value": "FUNCTIONAL", "label": "Functional" },
+      { "value": "CUSTOM", "label": "Custom" }
+    ],
+    "vendor_dependency_level": [
+      { "value": "LOW", "label": "Low" },
+      { "value": "MODERATE", "label": "Moderate" },
+      { "value": "HIGH", "label": "High" },
+      { "value": "CRITICAL", "label": "Critical" }
+    ],
+    "issue_sensitivity": [
+      { "value": "LOW", "label": "Low" },
+      { "value": "NORMAL", "label": "Normal" },
+      { "value": "HIGH", "label": "High" },
+      { "value": "CRITICAL", "label": "Critical" }
+    ],
+    "ops_monitoring_level": [
+      { "value": "LIGHT", "label": "Light", "description": "Important updates only" },
+      { "value": "STANDARD", "label": "Standard", "description": "Regular monitoring" },
+      { "value": "DETAILED", "label": "Detailed", "description": "More frequent alerts" },
+      { "value": "REAL_TIME", "label": "Real-time", "description": "Immediate monitoring where supported" }
+    ],
+    "approval_model": [
+      { "value": "NONE", "label": "No approval required" },
+      { "value": "OWNER_ONLY", "label": "Owner only" },
+      { "value": "SINGLE_APPROVER", "label": "Single approver" },
+      { "value": "MULTI_APPROVER", "label": "Multiple approvers" },
+      { "value": "THRESHOLD_BASED", "label": "Threshold-based" },
+      { "value": "ROLE_BASED", "label": "Role-based" }
+    ],
+    "allocation_mode": [
+      { "value": "FIXED_AMOUNT", "label": "Fixed amounts" },
+      { "value": "PERCENTAGE", "label": "Percentages" }
+    ],
+    "team_roles": [
+      { "value": "OWNER", "label": "Owner", "description": "Full access" },
+      { "value": "ADMIN", "label": "Admin", "description": "Manage members and settings" },
+      { "value": "TEAM_LEAD", "label": "Team lead", "description": "Day-to-day team coordination" },
+      { "value": "OPERATIONS_LEAD", "label": "Operations lead", "description": "Owns operational execution" },
+      { "value": "FINANCE_LEAD", "label": "Finance lead", "description": "Financial visibility and budget" },
+      { "value": "BUDGET_OWNER", "label": "Budget owner", "description": "Owns budget decisions" },
+      { "value": "APPROVER", "label": "Approver", "description": "Can review and decide approval requests" },
+      { "value": "CONTRIBUTOR", "label": "Contributor", "description": "Create permitted activities" },
+      { "value": "MEMBER", "label": "Member", "description": "Participate in team work" },
+      { "value": "OBSERVER", "label": "Observer", "description": "Read-only access" }
+    ],
+    "runway_roles": [
+      { "value": "OWNER", "label": "Owner", "description": "Full access" },
+      { "value": "FOUNDER", "label": "Founder", "description": "Strategic ownership" },
+      { "value": "FINANCE_LEAD", "label": "Finance lead", "description": "Owns cash and burn tracking" },
+      { "value": "OPERATIONS_LEAD", "label": "Operations lead", "description": "Owns operating spend" },
+      { "value": "APPROVER", "label": "Approver", "description": "Reviews funding and large expenses" },
+      { "value": "ADVISOR", "label": "Advisor", "description": "Advisory visibility" },
+      { "value": "CONTRIBUTOR", "label": "Contributor", "description": "Can add financial updates" },
+      { "value": "OBSERVER", "label": "Observer", "description": "Read-only access" }
+    ],
+    "ops_roles": [
+      { "value": "OWNER", "label": "Owner", "description": "Full access" },
+      { "value": "ADMIN", "label": "Admin", "description": "Manage members and settings" },
+      { "value": "OPERATIONS_LEAD", "label": "Operations lead", "description": "Day-to-day operations" },
+      { "value": "BUDGET_CONTROLLER", "label": "Budget controller", "description": "Owns budget allocations" },
+      { "value": "FINANCE_LEAD", "label": "Finance lead", "description": "Financial oversight" },
+      { "value": "APPROVER", "label": "Approver", "description": "Can review and decide approval requests" },
+      { "value": "VENDOR_MANAGER", "label": "Vendor manager", "description": "Owns vendor relationships" },
+      { "value": "CONTRIBUTOR", "label": "Contributor", "description": "Create permitted activities" },
+      { "value": "MEMBER", "label": "Member", "description": "Participate in operations" },
+      { "value": "OBSERVER", "label": "Observer", "description": "Read-only access" }
+    ],
+    "invite_methods": [
+      { "value": "EMAIL", "label": "Email" },
+      { "value": "WHATSAPP", "label": "WhatsApp" },
+      { "value": "COPY_LINK", "label": "Share link" },
+      { "value": "QR", "label": "QR code" },
+      { "value": "SMS", "label": "Message" }
+    ]
+  },
+  "templates": {
+    "team_ops": {
+      "title": "Team Operations Setup",
+      "activate_cta": "Activate Team Operations",
+      "activation_success": "Team Operations activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Team basics",
+          "shortTitle": "Basics",
+          "description": "Tell us what this team does and how it works. You can change these settings later.",
+          "intro": "Tell us what this team does and how it works. You can change these settings later.",
+          "fields": [
+            {
+              "key": "moment_name",
+              "label": "What should we call this moment?",
+              "helper": "How this operating chapter appears in Momentra.",
+              "placeholder": "Engineering Team",
+              "control": "text",
+              "maxLength": 60
+            },
+            {
+              "key": "team_name",
+              "label": "Team name",
+              "helper": "The real team or function being managed.",
+              "placeholder": "Product",
+              "control": "text",
+              "maxLength": 60
+            },
+            {
+              "key": "team_purpose",
+              "label": "What is this team for?",
+              "placeholder": "Plan releases, coordinate work and track approvals",
+              "control": "text"
+            },
+            {
+              "key": "team_size",
+              "label": "How big is your team?",
+              "control": "cards",
+              "choices": "team_size"
+            },
+            {
+              "key": "work_style",
+              "label": "How does the team usually work?",
+              "helper": "Choosing Hybrid allows both remote and office employees.",
+              "control": "cards",
+              "choices": "work_style",
+              "tip": "Choosing Hybrid allows both remote and office employees."
+            },
+            {
+              "key": "operating_currency_code",
+              "label": "Operating currency",
+              "control": "suggested_picker",
+              "suggested": ["INR", "USD", "EUR", "GBP"]
+            },
+            {
+              "key": "monthly_team_budget_minor",
+              "label": "Approximate monthly operating budget",
+              "helper": "This helps build cash flow insights. You can change this later.",
+              "optionalLabel": "Optional",
+              "control": "money"
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "configuration",
+          "title": "How the team works",
+          "shortTitle": "Configuration",
+          "description": "Set how the team coordinates, approves spend, and stays visible.",
+          "intro": "Set how the team coordinates, approves spend, and stays visible.",
+          "sections": ["Coordination", "Approvals", "Visibility and notifications"],
+          "fields": [
+            {
+              "key": "coordination_style",
+              "label": "Coordination style",
+              "control": "chips",
+              "choices": "coordination_style"
+            },
+            {
+              "key": "review_cycle",
+              "label": "Review cycle",
+              "control": "chips",
+              "choices": "review_cycle"
+            },
+            {
+              "key": "monitoring_level",
+              "label": "How closely should Momentra monitor this?",
+              "control": "chips",
+              "choices": "team_monitoring_level"
+            },
+            {
+              "key": "approval_required_for_spend",
+              "label": "Require approval for spending?",
+              "control": "toggle"
+            },
+            {
+              "key": "approval_threshold_minor",
+              "label": "Approval required above",
+              "control": "money",
+              "revealWhen": "approval_required_for_spend"
+            },
+            {
+              "key": "visibility",
+              "label": "Visibility",
+              "control": "chips",
+              "choices": "visibility_team"
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "people",
+          "title": "People and roles",
+          "shortTitle": "People",
+          "description": "Add the people who will run this team. You can invite them now or later.",
+          "intro": "Add the people who will run this team. You can invite them now or later."
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "shortTitle": "Review",
+          "description": "Confirm the basics, then activate Team Operations.",
+          "intro": "Confirm the basics, then activate Team Operations."
+        }
+      ]
+    },
+    "business_runway": {
+      "title": "Business Runway Setup",
+      "activate_cta": "Activate Business Runway",
+      "activation_success": "Business Runway activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Runway basics",
+          "shortTitle": "Basics",
+          "description": "Set the financial starting point Momentra will use to estimate how long your business can operate.",
+          "intro": "Set the financial starting point Momentra will use to estimate how long your business can operate.",
+          "fields": [
+            {
+              "key": "moment_name",
+              "label": "What should we call this moment?",
+              "control": "text",
+              "maxLength": 60
+            },
+            { "key": "runway_name", "label": "Runway name", "control": "text", "maxLength": 60 },
+            {
+              "key": "business_stage",
+              "label": "Where is the business today?",
+              "control": "chips",
+              "choices": "business_stage"
+            },
+            {
+              "key": "operating_currency_code",
+              "label": "Operating currency",
+              "control": "suggested_picker",
+              "suggested": ["INR", "USD", "EUR", "GBP"]
+            },
+            {
+              "key": "runway_goal_months",
+              "label": "How many months of runway do you want?",
+              "control": "chips",
+              "choices": "runway_goal_presets"
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "financial",
+          "title": "Financial picture",
+          "shortTitle": "Financials",
+          "description": "Enter cash, spending, and revenue assumptions. Your live summary updates as you type.",
+          "intro": "Enter cash, spending, and revenue assumptions. Your live summary updates as you type.",
+          "sections": ["Cash today", "Revenue", "Risk and funding"],
+          "fields": [
+            {
+              "key": "current_cash_minor",
+              "label": "Available operating cash",
+              "helper": "Include cash that is currently available to operate the business.",
+              "control": "money"
+            },
+            {
+              "key": "monthly_burn_minor",
+              "label": "Typical monthly spending",
+              "helper": "Enter the typical amount the business spends each month.",
+              "control": "money"
+            },
+            {
+              "key": "revenue_status",
+              "label": "Current revenue stage",
+              "control": "chips",
+              "choices": "revenue_status"
+            },
+            {
+              "key": "estimated_monthly_revenue_minor",
+              "label": "Expected monthly revenue",
+              "control": "money",
+              "hideWhenRevenue": "NO_REVENUE"
+            },
+            {
+              "key": "collection_rate_percent",
+              "label": "Payment collection rate",
+              "helper": "The percentage of expected revenue that normally reaches your account. Example: if ₹10 lakh is expected and ₹8 lakh is usually received, enter 80%.",
+              "control": "text",
+              "hideWhenRevenue": "NO_REVENUE"
+            },
+            {
+              "key": "revenue_model",
+              "label": "Revenue model",
+              "control": "chips",
+              "choices": "revenue_model"
+            },
+            {
+              "key": "runway_alert_threshold_months",
+              "label": "Warn me when runway falls below",
+              "control": "chips",
+              "choices": "alert_threshold_presets"
+            },
+            {
+              "key": "funding_sources",
+              "label": "How is the business funded?",
+              "control": "multi_chips",
+              "choices": "funding_sources"
+            },
+            {
+              "key": "burn_categories",
+              "label": "Where does spending go?",
+              "control": "multi_chips",
+              "choices": "burn_categories"
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "people",
+          "title": "People and governance",
+          "shortTitle": "People",
+          "description": "Choose who owns cash, burn, and approvals for this runway.",
+          "intro": "Choose who owns cash, burn, and approvals for this runway."
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "shortTitle": "Review",
+          "description": "This estimate depends on the cash, burn and revenue assumptions entered above.",
+          "intro": "This estimate depends on the cash, burn and revenue assumptions entered above."
+        }
+      ]
+    },
+    "business_operations": {
+      "title": "Business Operations Setup",
+      "activate_cta": "Activate Business Operations",
+      "activation_success": "Business Operations activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Operations basics",
+          "shortTitle": "Basics",
+          "description": "Describe the part of your business you want to monitor—its budget, approvals, vendors and operational risks.",
+          "intro": "Describe the part of your business you want to monitor—its budget, approvals, vendors and operational risks.",
+          "fields": [
+            {
+              "key": "moment_name",
+              "label": "What should we call this moment?",
+              "control": "text",
+              "maxLength": 60
+            },
+            { "key": "operations_name", "label": "Operations name", "control": "text", "maxLength": 60 },
+            {
+              "key": "operations_scope",
+              "label": "What part of the business is this?",
+              "helper": "Choose the part of the business this moment will monitor.",
+              "control": "chips",
+              "choices": "operations_scope"
+            },
+            {
+              "key": "operating_model",
+              "label": "How is work organized?",
+              "helper": "How are operating decisions and responsibilities organized?",
+              "control": "chips",
+              "choices": "operating_model"
+            },
+            {
+              "key": "operating_currency_code",
+              "label": "Operating currency",
+              "control": "suggested_picker",
+              "suggested": ["INR", "USD", "EUR", "GBP"]
+            },
+            {
+              "key": "review_cycle",
+              "label": "Review cycle",
+              "control": "chips",
+              "choices": "review_cycle"
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "budget",
+          "title": "Budget and monitoring",
+          "shortTitle": "Budget",
+          "description": "Set the operating budget, vendor risk profile, and how closely Momentra should monitor this.",
+          "intro": "Set the operating budget, vendor risk profile, and how closely Momentra should monitor this.",
+          "sections": ["Operating budget", "Vendor and risk profile", "Monitoring and alerts"],
+          "fields": [
+            {
+              "key": "monthly_budget_minor",
+              "label": "Monthly operating budget",
+              "control": "money"
+            },
+            {
+              "key": "allocation_mode",
+              "label": "Allocation method",
+              "control": "chips",
+              "choices": "allocation_mode"
+            },
+            {
+              "key": "vendor_dependency_level",
+              "label": "How dependent are you on vendors?",
+              "helper": "Vendor dependency describes how severely operations would be affected if a key vendor stopped delivering.",
+              "control": "chips",
+              "choices": "vendor_dependency_level"
+            },
+            {
+              "key": "issue_sensitivity",
+              "label": "Issue sensitivity",
+              "helper": "Issue sensitivity controls how quickly Momentra highlights operational problems.",
+              "control": "chips",
+              "choices": "issue_sensitivity"
+            },
+            {
+              "key": "monitoring_level",
+              "label": "How closely should Momentra monitor this?",
+              "control": "chips",
+              "choices": "ops_monitoring_level"
+            },
+            {
+              "key": "approval_model",
+              "label": "Approval model",
+              "control": "chips",
+              "choices": "approval_model"
+            },
+            {
+              "key": "approval_threshold_minor",
+              "label": "Approval required above",
+              "control": "money"
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "people",
+          "title": "People and approvals",
+          "shortTitle": "People",
+          "description": "Assign leads, approvers, and who can see this operations moment.",
+          "intro": "Assign leads, approvers, and who can see this operations moment."
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "shortTitle": "Review",
+          "description": "Confirm scope, budget, approvals, and monitoring before activating.",
+          "intro": "Confirm scope, budget, approvals, and monitoring before activating."
+        }
+      ]
+    }
+  }
+}

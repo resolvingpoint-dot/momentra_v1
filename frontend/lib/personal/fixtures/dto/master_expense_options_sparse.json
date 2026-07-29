@@ -1,0 +1,12 @@
+{
+  "accounts": [],
+  "categories": [],
+  "feelings": [{ "value": "NEUTRAL", "label": "Neutral" }],
+  "scale_levels": [{ "value": "MEDIUM", "label": "Medium" }],
+  "shared_with": [],
+  "relationship_impacts": [],
+  "context_reasons": [],
+  "life_operations_moment_id": null,
+  "lifestyle_moment_id": null,
+  "emotional_security_moment_id": null
+}

@@ -1,0 +1,412 @@
+{
+  "catalog_version": 1,
+  "template_version": 1,
+  "setup_version": 1,
+  "estimated_minutes": 4,
+  "choices": {
+    "experience_type": [
+      { "value": "TRIP_VACATION", "label": "Trip / Vacation" },
+      { "value": "WEDDING", "label": "Wedding" },
+      { "value": "CELEBRATION", "label": "Celebration" },
+      { "value": "OFFICE_OUTING", "label": "Office Outing" }
+    ],
+    "split_style": [
+      { "value": "NO_MONEY", "label": "Plan only — track money later" },
+      { "value": "SPLIT_LATER", "label": "Split expenses as you go" },
+      { "value": "SHARED_POOL", "label": "Shared pool / kitty" }
+    ],
+    "purchase_profile": [
+      { "value": "GIFT_POOL", "label": "Gift Pool" },
+      { "value": "GROUP_PURCHASE", "label": "Group Purchase" },
+      { "value": "SHARED_ASSET", "label": "Shared Asset" },
+      { "value": "CUSTOM_PURCHASE", "label": "Custom Purchase" }
+    ],
+    "payment_plan": [
+      { "value": "SUGGESTED", "label": "Suggested amounts", "description": "Momentra suggests fair amounts; members can adjust." },
+      { "value": "EQUAL", "label": "Equal contribution", "description": "Split the target evenly across contributors." },
+      { "value": "OPEN", "label": "Flexible contributions", "description": "Members contribute different amounts without a fixed equal split." }
+    ],
+    "ownership_style": [
+      { "value": "SHARED", "label": "Shared equally", "description": "Ownership is shared across the group." },
+      { "value": "EQUAL", "label": "Equal shares", "description": "Equal ownership shares for each member." },
+      { "value": "CUSTOM", "label": "Custom shares", "description": "Set custom ownership shares per member later." }
+    ],
+    "living_type": [
+      { "value": "FLATMATES", "label": "Flatmates", "description": "Roommates sharing a flat or apartment." },
+      { "value": "FAMILY_HOUSEHOLD", "label": "Family", "description": "A family home with shared household costs." },
+      { "value": "COLIVING", "label": "Co-living", "description": "A co-living space with shared amenities." },
+      { "value": "CUSTOM_LIVING", "label": "Custom", "description": "Another shared living arrangement." }
+    ],
+    "rent_split_style": [
+      { "value": "SHARED", "label": "Shared equally", "description": "Split rent and shared costs evenly." },
+      { "value": "LEAD", "label": "Managed by one lead", "description": "One person collects and manages shared costs." },
+      { "value": "ROTATION", "label": "Rotating", "description": "Rotate who covers or manages shared costs." }
+    ],
+    "chores_style": [
+      { "value": "SHARED", "label": "Shared", "description": "Everyone shares chores without fixed assignments." },
+      { "value": "ROTATION", "label": "Rotation", "description": "Rotate chore duties on a schedule." },
+      { "value": "ASSIGNED", "label": "Assigned", "description": "Assign specific chores to residents." }
+    ],
+    "allow_multi_currency": [
+      { "value": "true", "label": "Yes — members can log expenses in other currencies" },
+      { "value": "false", "label": "No — lock to default currency" }
+    ],
+    "invite_methods": [
+      { "value": "EMAIL", "label": "Email" },
+      { "value": "WHATSAPP", "label": "WhatsApp" },
+      { "value": "LINK", "label": "Share link" },
+      { "value": "QR", "label": "QR code" },
+      { "value": "MESSAGE", "label": "Message" }
+    ]
+  },
+  "templates": {
+    "shared_experience": {
+      "title": "Shared Experience Setup",
+      "activate_cta": "Activate Shared Experience",
+      "activation_success": "Shared Experience activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Experience basics",
+          "shortTitle": "Basics",
+          "description": "Name the experience and set the tone for what you are planning together.",
+          "fields": [
+            {
+              "key": "experience_type",
+              "label": "What kind of experience is this?",
+              "control": "chips",
+              "choices": "experience_type"
+            },
+            {
+              "key": "experience_name",
+              "label": "What should we call this experience?",
+              "control": "text",
+              "maxLength": 60
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "dates_money",
+          "title": "Dates, destination, and money",
+          "shortTitle": "Details",
+          "description": "Add timing, place, and how money will be shared.",
+          "fields": [
+            { "key": "destination", "label": "Where is this happening?", "control": "text", "optional": true },
+            { "key": "start_date", "label": "When does it start?", "control": "date", "optional": true },
+            { "key": "end_date", "label": "When does it end?", "control": "date", "optional": true },
+            {
+              "key": "budget_currency",
+              "label": "What currency should we use by default?",
+              "control": "suggested_picker",
+              "suggested": ["INR", "USD", "EUR", "GBP"]
+            },
+            {
+              "key": "allow_multi_currency",
+              "label": "Can members log expenses in other currencies?",
+              "control": "chips",
+              "choices": "allow_multi_currency",
+              "optional": true
+            },
+            {
+              "key": "estimated_budget",
+              "label": "About how much is the group budget?",
+              "control": "money",
+              "optional": true
+            },
+            {
+              "key": "split_style",
+              "label": "How will you handle money?",
+              "control": "chips",
+              "choices": "split_style"
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "participants",
+          "title": "Participants and invitations",
+          "shortTitle": "People",
+          "description": "Invite the people joining this experience. You can add more later.",
+          "fields": [
+            {
+              "key": "participants",
+              "label": "How many people are joining?",
+              "control": "text",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "shortTitle": "Review",
+          "description": "Confirm the plan, then activate Shared Experience."
+        }
+      ]
+    },
+    "shared_purchase": {
+      "title": "Shared Purchase Setup",
+      "activate_cta": "Activate Shared Purchase",
+      "activation_success": "Shared Purchase activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Purchase basics",
+          "shortTitle": "Basics",
+          "description": "Tell us what the group is buying, funding, or saving toward.",
+          "fields": [
+            {
+              "key": "purchase_profile",
+              "label": "What kind of purchase is this?",
+              "control": "cards",
+              "choices": "purchase_profile",
+              "tip": "Pick the closest type — you can refine details later."
+            },
+            {
+              "key": "purchase_name",
+              "label": "What are you buying or saving for?",
+              "control": "text",
+              "maxLength": 60,
+              "placeholder": "Birthday gift for Rahul",
+              "helper": "How this purchase appears in Momentra."
+            },
+            {
+              "key": "item_or_goal",
+              "label": "What is the item or goal?",
+              "control": "text",
+              "optional": true,
+              "placeholder": "New apartment refrigerator",
+              "helper": "Optional detail about the item or savings goal."
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "goal_rules",
+          "title": "Goal and contributions",
+          "shortTitle": "Goal",
+          "description": "Set the target and decide how members will contribute.",
+          "fields": [
+            {
+              "key": "expected_amount",
+              "label": "How much do you expect to spend?",
+              "control": "money",
+              "helper": "Enter the group target in normal currency units."
+            },
+            {
+              "key": "currency_code",
+              "label": "What currency should we use by default?",
+              "control": "suggested_picker",
+              "suggested": ["INR", "USD", "EUR", "GBP"]
+            },
+            {
+              "key": "allow_multi_currency",
+              "label": "Can members log expenses in other currencies?",
+              "control": "chips",
+              "choices": "allow_multi_currency",
+              "optional": true,
+              "explainer": {
+                "title": "Multi-currency",
+                "body": "Use this when contributions may be recorded in more than one currency."
+              }
+            },
+            {
+              "key": "payment_plan",
+              "label": "How should contributions work?",
+              "control": "cards",
+              "choices": "payment_plan",
+              "explainer": {
+                "title": "Contribution model",
+                "body": "How the target is divided or collected from members."
+              }
+            },
+            {
+              "key": "ownership_style",
+              "label": "How should ownership work?",
+              "control": "cards",
+              "choices": "ownership_style",
+              "optional": true
+            },
+            {
+              "key": "decision_deadline",
+              "label": "When do you need to decide by?",
+              "control": "date",
+              "optional": true,
+              "explainer": {
+                "title": "Target date",
+                "body": "An optional planning date. It does not automatically close the purchase."
+              }
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "members",
+          "title": "Members and ownership",
+          "shortTitle": "People",
+          "description": "Choose who is involved and how ownership or responsibility is shared.",
+          "fields": [
+            {
+              "key": "contributors",
+              "label": "How many people are contributing?",
+              "control": "text",
+              "optional": true,
+              "placeholder": "e.g. 4",
+              "helper": "Optional count. Invite people now or later."
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review your shared purchase",
+          "shortTitle": "Review",
+          "description": "Confirm the goal and members, then activate Shared Purchase."
+        }
+      ]
+    },
+    "shared_living": {
+      "title": "Shared Living Setup",
+      "activate_cta": "Activate Shared Living",
+      "activation_success": "Shared Living activated",
+      "steps": [
+        {
+          "step": 1,
+          "id": "basics",
+          "title": "Home basics",
+          "shortTitle": "Basics",
+          "description": "Tell us what kind of shared home this is and what to call it.",
+          "tip": "Pick the living type first — the name placeholder updates to match.",
+          "fields": [
+            {
+              "key": "living_type",
+              "label": "What kind of shared home is this?",
+              "control": "cards",
+              "choices": "living_type",
+              "summary_label": "Living type"
+            },
+            {
+              "key": "home_name",
+              "label": "What should we call this home?",
+              "control": "text",
+              "maxLength": 60,
+              "helper": "How this home appears in Momentra.",
+              "placeholder": "Apartment 504",
+              "examples": [
+                "Apartment 504",
+                "Malla Family Home",
+                "Jubilee Hills Flatmates"
+              ],
+              "summary_label": "Home name"
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "id": "budget_prefs",
+          "title": "Budget, responsibilities and preferences",
+          "shortTitle": "Budget",
+          "description": "Set the household budget and how shared costs and chores work.",
+          "tip": "Budget is optional planning context — it does not lock residents into fixed amounts.",
+          "fields": [
+            {
+              "key": "monthly_budget",
+              "label": "About how much is the monthly household budget?",
+              "control": "money",
+              "optional": true,
+              "helper": "Enter the monthly target in normal currency units.",
+              "explainer": {
+                "title": "Monthly household budget",
+                "body": "An optional planning amount for shared living costs. It does not automatically charge residents."
+              },
+              "summary_label": "Budget"
+            },
+            {
+              "key": "currency_code",
+              "label": "What currency should we use by default?",
+              "control": "suggested_picker",
+              "suggested": ["INR", "USD", "EUR", "GBP"],
+              "summary_label": "Currency"
+            },
+            {
+              "key": "allow_multi_currency",
+              "label": "Can members log expenses in other currencies?",
+              "control": "chips",
+              "choices": "allow_multi_currency",
+              "optional": true,
+              "explainer": {
+                "title": "Multi-currency",
+                "body": "Use this when household expenses may be recorded in more than one currency."
+              }
+            },
+            {
+              "key": "rent_split_style",
+              "label": "How should rent and shared costs be split?",
+              "control": "cards",
+              "choices": "rent_split_style",
+              "explainer": {
+                "title": "Rent cycle / cost split",
+                "body": "How rent and recurring shared costs are divided or managed among residents."
+              },
+              "summary_label": "Cost split"
+            },
+            {
+              "key": "chores_style",
+              "label": "How do you want to handle chores?",
+              "control": "chips",
+              "choices": "chores_style",
+              "optional": true,
+              "explainer": {
+                "title": "House responsibilities",
+                "body": "How chores and household responsibilities are shared, rotated, or assigned."
+              },
+              "summary_label": "Chores"
+            },
+            {
+              "key": "rules_or_notes",
+              "label": "Any house rules or notes?",
+              "control": "text",
+              "optional": true,
+              "placeholder": "Quiet hours after 10pm, shared kitchen cleaning…",
+              "helper": "Optional house rules residents can see later."
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "id": "members",
+          "title": "Residents and roles",
+          "shortTitle": "People",
+          "description": "Choose who lives here and invite housemates.",
+          "tip": "You remain the household admin. Invite housemates now or later.",
+          "invite_copy": {
+            "title": "Invite housemates",
+            "helper": "Share a QR code or invite link — WhatsApp, Messages, and email are shortcuts."
+          },
+          "fields": [
+            {
+              "key": "members",
+              "label": "How many people live here?",
+              "control": "text",
+              "optional": true,
+              "placeholder": "e.g. 3",
+              "helper": "Optional count. Invite people with the panel below.",
+              "summary_label": "Residents"
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "id": "review",
+          "title": "Review and activate",
+          "shortTitle": "Review",
+          "description": "Confirm the home setup, then activate Shared Living."
+        }
+      ]
+    }
+  }
+}

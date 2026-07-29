@@ -1,0 +1,138 @@
+import { buildBundle, field, personalEndpoint, type ActionDef } from "../builders";
+import type { QuickAddTemplateBundle } from "../types";
+
+const TEMPLATE_ID = "personal.future_building";
+const CONTEXT = "FUTURE_BUILDING" as const;
+const MODULES = ["pulse", "live", "memory", "moments"];
+
+const actions: ActionDef[] = [
+  {
+    action_id: "CONTRIBUTION",
+    reusable_type: "contribution",
+    label: "Investment",
+    icon: "savings",
+    display_order: 1,
+    cta_label: "Save Investment",
+    fields: [
+      field("amount", "Amount", "amount", { required: true }),
+      field("category_name", "Category", "single_select"),
+      field("impact_level", "How important is this investment?", "chip_grid"),
+      field("notes", "Notes", "textarea"),
+    ],
+    validation: { required_fields: ["amount"] },
+    impact_preview: { modules: MODULES, summary_template: "Records investment of ₹{amount}" },
+    backend_endpoint: personalEndpoint("POST /api/v1/personal/live/quick-add"),
+    output_event: { event_type: "CONTRIBUTION", ref_table: "personal_quick_add_events" },
+    affects_modules: MODULES,
+  },
+  {
+    action_id: "MILESTONE",
+    reusable_type: "milestone",
+    label: "Milestone",
+    icon: "flag",
+    display_order: 2,
+    cta_label: "Save Milestone",
+    fields: [
+      field("milestone_nature", "What kind of milestone was this?", "single_select", { required: true }),
+      field("celebration_level", "How big does this feel?", "chip_grid"),
+      field("outcome_value", "Measurable outcome", "chip_grid"),
+      field("notes", "Notes", "textarea"),
+    ],
+    validation: { required_fields: ["milestone_nature"] },
+    impact_preview: { modules: MODULES, summary_template: "Logs milestone: {milestone_nature}" },
+    backend_endpoint: personalEndpoint("POST /api/v1/personal/live/quick-add"),
+    output_event: {
+      event_type: "MILESTONE",
+      ref_table: "personal_quick_add_events",
+      fan_out: [{ event_type: "MILESTONE_CHILD", ref_table: "personal_future_milestone_events" }],
+    },
+    affects_modules: MODULES,
+  },
+  {
+    action_id: "OPPORTUNITY",
+    reusable_type: "update",
+    label: "Opportunity",
+    icon: "lightbulb",
+    display_order: 3,
+    cta_label: "Save Opportunity",
+    fields: [
+      field("opportunity_source", "Where did this opportunity come from?", "single_select", {
+        required: true,
+      }),
+      field("opportunity_status", "Status", "chip_grid"),
+      field("confidence_level", "How promising is it?", "chip_grid"),
+      field("notes", "Notes", "textarea"),
+    ],
+    validation: { required_fields: ["opportunity_source"] },
+    impact_preview: { modules: MODULES, summary_template: "Captures opportunity from {opportunity_source}" },
+    backend_endpoint: personalEndpoint("POST /api/v1/personal/live/quick-add"),
+    output_event: { event_type: "OPPORTUNITY", ref_table: "personal_quick_add_events" },
+    affects_modules: MODULES,
+  },
+  {
+    action_id: "PIVOT",
+    reusable_type: "decision",
+    label: "Pivot",
+    icon: "swap_horiz",
+    display_order: 4,
+    cta_label: "Save Pivot",
+    fields: [
+      field("pivot_change", "What changed?", "chip_grid", { required: true }),
+      field("pivot_reason", "Why did you change direction?", "chip_grid"),
+      field("confidence_level", "How confident are you in this change?", "chip_grid"),
+      field("notes", "Notes", "textarea", { required: true }),
+    ],
+    validation: { required_fields: ["pivot_change", "notes"] },
+    impact_preview: { modules: MODULES, summary_template: "Records pivot: {pivot_change}" },
+    backend_endpoint: personalEndpoint("POST /api/v1/personal/live/quick-add"),
+    output_event: { event_type: "PIVOT", ref_table: "personal_quick_add_events" },
+    affects_modules: MODULES,
+  },
+  {
+    action_id: "PROGRESS",
+    reusable_type: "update",
+    label: "Progress",
+    icon: "trending_up",
+    display_order: 5,
+    cta_label: "Save Progress",
+    fields: [
+      field("progress_type", "Progress type", "single_select", { required: true }),
+      field("time_invested", "Time invested", "chip_grid"),
+      field("effort_level", "How much effort did this take?", "chip_grid"),
+      field("notes", "Notes", "textarea"),
+    ],
+    validation: { required_fields: ["progress_type"] },
+    impact_preview: { modules: MODULES, summary_template: "Logs {progress_type} progress" },
+    backend_endpoint: personalEndpoint("POST /api/v1/personal/live/quick-add"),
+    output_event: { event_type: "PROGRESS", ref_table: "personal_quick_add_events" },
+    affects_modules: MODULES,
+  },
+  {
+    action_id: "LEARNING",
+    reusable_type: "update",
+    label: "Learning",
+    icon: "school",
+    display_order: 6,
+    cta_label: "Save Learning",
+    fields: [
+      field("learning_type", "What type of learning was this?", "single_select", { required: true }),
+      field("learning_topic", "Topic — optional", "text"),
+      field("relevance", "How useful is this?", "chip_grid"),
+      field("application", "How will you apply it?", "textarea"),
+      field("notes", "Notes", "textarea"),
+    ],
+    validation: { required_fields: ["learning_type"] },
+    impact_preview: { modules: MODULES, summary_template: "Saves learning: {learning_type}" },
+    backend_endpoint: personalEndpoint("POST /api/v1/personal/live/quick-add"),
+    output_event: { event_type: "LEARNING", ref_table: "personal_quick_add_events" },
+    affects_modules: MODULES,
+  },
+];
+
+export const FUTURE_BUILDING_QUICK_ADD: QuickAddTemplateBundle = buildBundle(
+  TEMPLATE_ID,
+  CONTEXT,
+  "tabbed_hub",
+  actions,
+  { default_action_id: "CONTRIBUTION" },
+);

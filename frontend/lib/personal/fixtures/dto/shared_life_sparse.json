@@ -1,0 +1,33 @@
+{
+  "life_health": {
+    "life_score": 0,
+    "status_label": "",
+    "delta_month": null,
+    "insight_quote": "",
+    "satellite_scores": []
+  },
+  "emotional_trend": { "window_label": "30d", "series": [], "is_sparse": true },
+  "dominant_emotion": {
+    "dominant_code": "none",
+    "dominant_label": "",
+    "dominant_percent": 0,
+    "breakdown": [],
+    "footer_text": "",
+    "is_sparse": true
+  },
+  "balance_model": { "subtitle": "", "dimensions": [] },
+  "connections": [],
+  "drift_alert": null,
+  "leverage": null,
+  "happiness": {
+    "top_drivers": [],
+    "highest_return": [],
+    "lowest_return": [],
+    "footer_text": ""
+  },
+  "intelligence": { "preamble": "", "insight_text": "", "cta_label": "" },
+  "monthly_changes": [],
+  "journey": [],
+  "quick_actions": [],
+  "footer_quote": ""
+}

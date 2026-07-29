@@ -1,0 +1,97 @@
+[data-momentra-context="personal"] {
+  /* ───── Personal Intelligence OS ───── */
+  /* Source: screens/personal/personal theme/ — dark-only atmospheric violet palette */
+
+  /* ───── Ground & Surfaces ───── */
+  --color-background:               #14121b;
+  --color-on-background:            #e5e0ee;
+  --color-surface:                  #14121b;
+  --color-surface-dim:              #14121b;
+  --color-surface-bright:           #3a3842;
+  --color-surface-variant:          #35333e;
+  --color-surface-container-lowest: #0e0d16;
+  --color-surface-container-low:    #1c1a24;
+  --color-surface-container:        #201e28;
+  --color-surface-container-high:   #2b2933;
+  --color-surface-container-highest:#35333e;
+
+  /* ───── Brand Violet / Cyan ───── */
+  --color-primary:                  #c9bfff;
+  --color-on-primary:               #2f009c;
+  --color-primary-container:        #6c4ef2;
+  --color-on-primary-container:     #f2ecff;
+  --color-primary-light:            #8b6ff5;
+  --color-inverse-primary:          #5e3de3;
+  --color-secondary:                #cabeff;
+  --color-on-secondary:             #311c7e;
+  --color-secondary-container:      #4b3998;
+  --color-on-secondary-container:   #bcaeff;
+  --color-secondary-teal:           #35c7c7;
+  --color-tertiary:                 #4cd6ff;
+  --color-on-tertiary:              #003543;
+  --color-tertiary-container:       #007691;
+  --color-on-tertiary-container:    #d8f3ff;
+  --color-surface-tint:             #c9bfff;
+
+  /* ───── Text ───── */
+  --color-on-surface:               #e5e0ee;
+  --color-on-surface-variant:       #c9c4d8;
+  --color-inverse-surface:          #e5e0ee;
+  --color-inverse-on-surface:       #312f39;
+
+  /* ───── Outline ───── */
+  --color-outline:                  #938ea1;
+  --color-outline-variant:          #484555;
+
+  /* ───── Semantic ───── */
+  --color-error:                    #ffb4ab;
+  --color-on-error:                 #690005;
+  --color-error-container:          #93000a;
+  --color-on-error-container:       #ffdad6;
+  --color-success:                  #c9bfff;
+
+  /* ───── Glass / Elevation ───── */
+  --color-glass-background:         rgba(255, 255, 255, 0.05);
+  --color-glass-card-background:    #1a1728;
+  --glass-border-opacity:           0.08;
+  --glass-blur:                     12px;
+  --glass-overlay-blur:             20px;
+  --elevation-glow-primary:         rgba(108, 78, 242, 0.2);
+  --elevation-inner-border:         rgba(255, 255, 255, 0.08);
+  --elevation-atmospheric-orb:      rgba(108, 78, 242, 0.15);
+
+  /* ───── Fonts ───── */
+  --font-sans:                      "Plus Jakarta Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-label:                     "Plus Jakarta Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* ───── Typography roles ───── */
+  --text-hero-title:                700 28px/36px var(--font-sans);
+  --text-screen-title:              700 22px/28px var(--font-sans);
+  --text-section-header:            600 17px/22px var(--font-sans);
+  --text-body-md:                   400 14px/20px var(--font-sans);
+  --text-label-sm:                  500 12px/16px var(--font-label);
+  --text-nav-label:                 600 12px/12px var(--font-label);
+
+  /* ───── Spacing ───── */
+  --spacing-unit:                   4px;
+  --spacing-stack-gap:              16px;
+  --spacing-gutter:                 16px;
+  --spacing-card-padding:           20px;
+  --spacing-section-gap:            32px;
+  --spacing-container-mobile:       20px;
+  --spacing-container-desktop:      80px;
+
+  /* ───── Radii ───── */
+  --radius-sm:                      4px;
+  --radius-default:                 8px;
+  --radius-md:                      12px;
+  --radius-lg:                      16px;
+  --radius-xl:                      24px;
+  --radius-pill:                    9999px;
+
+  /* ───── Gradients ───── */
+  --gradient-primary-button:        linear-gradient(135deg, #6c4ef2, #c9bfff);
+  --gradient-atmospheric-card:      linear-gradient(135deg, rgba(108,78,242,0.12), rgba(76,214,255,0.08));
+  --gradient-quick-add:             linear-gradient(135deg, #6c4ef2, #4cd6ff);
+  --gradient-atmospheric-orb:       radial-gradient(circle, rgba(108,78,242,0.15) 0%, transparent 70%);
+}

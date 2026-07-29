@@ -1,0 +1,38 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "sync-theme": "node scripts/sync-theme.mjs && node scripts/sync-context-tokens.mjs",
+    "postinstall": "node scripts/patch-gifted-charts.mjs && node scripts/postinstall-lightningcss.mjs",
+    "bundle-empty-assets": "node ../scripts/bundle-context-empty-assets.mjs",
+    "predev": "npm run sync-theme",
+    "dev": "node ./node_modules/next/dist/bin/next dev -H 0.0.0.0",
+    "prebuild": "npm run sync-theme",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@react-spring/web": "^10.1.1",
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "firebase": "^12.14.0",
+    "lightningcss-darwin-x64": "^1.32.0",
+    "lucide-react": "^1.18.0",
+    "next": "16.2.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-gifted-charts": "^0.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4",
+    "typescript": "^5.9.3"
+  }
+}

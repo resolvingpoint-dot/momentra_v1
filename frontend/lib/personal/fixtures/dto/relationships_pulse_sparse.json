@@ -1,0 +1,29 @@
+{
+  "bond_index": 0,
+  "bond_index_delta_month": null,
+  "status_band": "UNKNOWN",
+  "network_stability_label": "",
+  "radar_axes": [],
+  "hero_stats": {
+    "connections": 0,
+    "support": 0,
+    "experiences": 0,
+    "spend_minor": 0
+  },
+  "signal_chips": [],
+  "connection_count": 0,
+  "spend_minor": 0,
+  "recent_activity": [],
+  "financial_segments": [],
+  "trends_30d": { "trust": [], "connection": [] },
+  "gauges": [],
+  "opportunity": {
+    "title": "",
+    "body": "",
+    "cta_label": "",
+    "impact_chips": []
+  },
+  "intelligence": { "body": "", "confidence_percent": 0 },
+  "analysis_signals": [],
+  "quick_capture_actions": []
+}

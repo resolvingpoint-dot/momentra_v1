@@ -1,0 +1,54 @@
+[data-momentra-context="group"] {
+  /* ───── Sunset Together (Group) ───── */
+  /* Source: design-tokens/group.tokens.json — group empty-state screens */
+
+  /* ───── Ground & Surfaces ───── */
+  --color-background:              #131313;
+  --color-surface:                 #131313;
+  --color-surface-container:       #201F1F;
+  --color-surface-container-low:   #1C1B1B;
+  --color-primary-container:       #FF7A3D;
+
+  /* ───── Brand Sunset ───── */
+  --color-primary:                 #FFB598;
+  --color-on-primary:              #591D00;
+  --color-secondary:               #FFB690;
+  --color-on-secondary:            #542100;
+  --color-tertiary:                #FFB951;
+  --color-on-tertiary:             #452B00;
+
+  /* ───── Text ───── */
+  --color-on-surface:              #E5E2E1;
+  --color-on-surface-variant:      #DFC0B4;
+
+  /* ───── Outline / Glass ───── */
+  --color-outline:                 rgba(255, 255, 255, 0.1);
+  --color-glass-background:        rgba(255, 255, 255, 0.05);
+  --glass-blur-px:                 20;
+
+  /* ───── Semantic ───── */
+  --color-error:                   #FFB4AB;
+  --color-success:                 #4ADE80;
+
+  /* ───── Accent tags ───── */
+  --color-accent-escape:           #FFB598;
+  --color-accent-vow:              #FFB690;
+  --color-accent-pulse:            #FF7A3D;
+  --color-accent-summit:           #FFB951;
+
+  /* ───── Moment-type pulse accents ───── */
+  --group-moment-accent-experience:       #14B8A6;
+  --group-moment-accent-experience-dim:   #2DD4BF;
+  --group-moment-accent-experience-on:    #003734;
+  --group-moment-accent-experience-glow:  rgba(20, 184, 166, 0.15);
+  --group-moment-accent-purchase:         #F97316;
+  --group-moment-accent-purchase-dim:     #EA580C;
+  --group-moment-accent-purchase-on:      #652200;
+  --group-moment-accent-purchase-glow:    rgba(249, 115, 22, 0.15);
+  --group-moment-accent-living:           #F59E0B;
+  --group-moment-accent-living-on:        #422006;
+  --group-moment-accent-living-glow:      rgba(245, 158, 11, 0.15);
+
+  /* ───── Fonts ───── */
+  --font-sans:                     "Plus Jakarta Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}

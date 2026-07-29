@@ -1,0 +1,11 @@
+{
+  "moment_id": "00000000-0000-4000-8000-000000000001",
+  "trip_name": "Untitled moment",
+  "status_line": "All balances are settled.",
+  "balance_sync_percent": 100.0,
+  "balance_insight": "Nobody owes anything yet — log an expense to get started.",
+  "harmony_label": "In harmony",
+  "pending_balances": [],
+  "participants": [],
+  "guests": []
+}

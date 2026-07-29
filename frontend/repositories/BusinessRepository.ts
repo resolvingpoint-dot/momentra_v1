@@ -1,0 +1,31 @@
+import {
+  acceptBusinessWorkspaceInvite,
+  archiveBusinessMoment,
+  completeBusinessMoment,
+  createBusinessWorkspace,
+  getBusinessCreateOptions,
+  getBusinessSessionBootstrap,
+  getBusinessWorkspaceMoments,
+  getBusinessWorkspaceOverview,
+  inviteBusinessWorkspaceMember,
+  listBusinessWorkspaceMembers,
+  patchBusinessMoment,
+  selectBusinessWorkspace,
+  updateBusinessWorkspace,
+} from "@/lib/api/client";
+
+export const BusinessRepository = {
+  getSessionBootstrap: getBusinessSessionBootstrap,
+  getWorkspaceOverview: getBusinessWorkspaceOverview,
+  getWorkspaceMoments: getBusinessWorkspaceMoments,
+  getCreateOptions: getBusinessCreateOptions,
+  patchMoment: patchBusinessMoment,
+  completeMoment: completeBusinessMoment,
+  archiveMoment: archiveBusinessMoment,
+  createWorkspace: createBusinessWorkspace,
+  updateWorkspace: updateBusinessWorkspace,
+  selectWorkspace: selectBusinessWorkspace,
+  listWorkspaceMembers: listBusinessWorkspaceMembers,
+  inviteWorkspaceMember: inviteBusinessWorkspaceMember,
+  acceptWorkspaceInvite: acceptBusinessWorkspaceInvite,
+};

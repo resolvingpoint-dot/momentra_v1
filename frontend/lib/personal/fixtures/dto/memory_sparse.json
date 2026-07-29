@@ -1,0 +1,21 @@
+{
+  "synthesis_title": "",
+  "metrics": {
+    "identity_snapshot": {
+      "title": "",
+      "trend_label": "",
+      "confidence_percent": 0,
+      "body": "",
+      "image_url": null
+    },
+    "core_pattern": { "pattern_confidence_percent": 0, "nodes": [] },
+    "best_drivers": [],
+    "lowest_drivers": [],
+    "highest_return_behaviors": { "title": "", "roi_label": "", "bars": [] },
+    "emotional_dna": { "dominant_label": "", "segments": [], "insight_body": "" },
+    "behavioral_patterns": [],
+    "evolution_timeline": [],
+    "ai_interpretation": { "quote": "" },
+    "next_growth_edge": { "title": "", "body": "", "cta_label": "" }
+  }
+}
