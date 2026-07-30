@@ -9,6 +9,7 @@ data-backing step.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -139,17 +140,34 @@ class BusinessAppService:
 
     # ----- helpers -------------------------------------------------------- #
     async def _visible_moments(
-        self, user_id: UUID, *, workspace_id: UUID | None = None
+        self,
+        user_id: UUID,
+        *,
+        workspace_id: UUID | None = None,
+        moments: list[MomentModel] | None = None,
+        allowed_ids: set[UUID] | None = None,
     ) -> list[MomentModel]:
-        moments = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
-        visible = [m for m in moments if m.status in _VISIBLE_STATUSES]
+        """Workspace-scoped visible inventory.
+
+        Callers that already loaded ``moments`` / ``allowed_ids`` in parallel
+        can pass them to avoid a second round-trip.
+        """
+        owned = (
+            moments
+            if moments is not None
+            else await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
+        )
+        visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
         if workspace_id is None:
             return visible
-        allowed = await self.workspaces.moment_ids_for_workspace(workspace_id)
+        allowed = (
+            allowed_ids
+            if allowed_ids is not None
+            else await self.workspaces.moment_ids_for_workspace(workspace_id)
+        )
         if not allowed:
-            # Legacy moments may lack business_moments rows until setup sync —
-            # keep owned moments only when workspace has no mapped rows yet.
-            return []
+            # Legacy moments may lack business_moments rows until setup sync.
+            return visible
         return [m for m in visible if m.id in allowed]
 
     async def _resolve_workspace(
@@ -310,11 +328,8 @@ class BusinessAppService:
         ).model_dump(mode="json")
 
     async def create_options(self, user_id: UUID, *, workspace_id: UUID | None = None) -> dict:
-        resolved = await self._resolve_workspace(user_id, workspace_id=workspace_id)
-        ws_id = resolved[0].workspace_id if resolved else None
-        moments = await self._visible_moments(user_id, workspace_id=ws_id)
-        active = [m for m in moments if m.status in _ACTIVE_STATUSES]
-        latest = self._latest_by_code(moments)
+        """Catalog-only — clients attach linked moment ids from session inventory."""
+        _ = (user_id, workspace_id)
         cards = [
             s.BusinessCreateOptionCard(
                 moment_type_id=d.type_id,
@@ -327,20 +342,17 @@ class BusinessAppService:
                 accent_soft_tint=d.accent_soft_tint,
                 badge_label=d.badge_label,
                 display_order=d.display_order,
-                linked_moment_id=(str(latest[d.code].id) if d.code in latest else None),
-                linked_moment_status=(latest[d.code].status if d.code in latest else None),
-                is_active=bool(
-                    d.code in latest
-                    and (latest[d.code].status or "").upper() in _SWITCHER_ACTIVE_STATUSES
-                ),
+                linked_moment_id=None,
+                linked_moment_status=None,
+                is_active=False,
                 is_available=d.is_available,
                 implementation_status=d.implementation_status,
             )
             for d in BUSINESS_CREATE_CATALOG
         ]
         return s.BusinessCreateOptionsResponse(
-            is_empty=len(active) == 0,
-            active_moment_count=len(active),
+            is_empty=True,
+            active_moment_count=0,
             journey_steps=_how_it_works(),
             cards=cards,
         ).model_dump(mode="json")
@@ -371,22 +383,30 @@ class BusinessAppService:
 
     async def get_workspace_overview(self, user_id: UUID, workspace_id: UUID) -> dict:
         await self.workspaces.require_member(workspace_id, user_id)
-        visible = await self._visible_moments(user_id, workspace_id=workspace_id)
-        if not visible:
-            owned = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
-            owned_visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
-            mapped = await self.workspaces.moment_ids_for_workspace(workspace_id)
-            if not mapped:
-                visible = owned_visible
+        moments, allowed, member_count = await asyncio.gather(
+            self.moments.list_by_context(user_id, BUSINESS_CONTEXT),
+            self.workspaces.moment_ids_for_workspace(workspace_id),
+            self.workspaces.count_active_members(workspace_id),
+        )
+        visible = await self._visible_moments(
+            user_id,
+            workspace_id=workspace_id,
+            moments=moments,
+            allowed_ids=allowed,
+        )
         open_for_dash = sum(
             1
             for m in visible
             if (m.status or "").lower() in ("active", "configured", "draft")
             or (m.status or "").upper() in _ACTIVE_STATUSES
         )
-        dash = await self.workspaces.dashboard_summary(
-            workspace_id, open_moments=open_for_dash
-        )
+        dash = {
+            "open_moments": open_for_dash,
+            "pending_approvals": 0,
+            "member_count": member_count,
+            "revenue_today": None,
+            "cash_balance": None,
+        }
         recent = [self._map_moment(m) for m in visible[:5]]
         return s.BusinessWorkspaceOverviewResponse(
             workspace_id=str(workspace_id),
@@ -396,13 +416,16 @@ class BusinessAppService:
 
     async def get_workspace_moments(self, user_id: UUID, workspace_id: UUID) -> dict:
         await self.workspaces.require_member(workspace_id, user_id)
-        visible = await self._visible_moments(user_id, workspace_id=workspace_id)
-        if not visible:
-            owned = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
-            owned_visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
-            mapped = await self.workspaces.moment_ids_for_workspace(workspace_id)
-            if not mapped:
-                visible = owned_visible
+        moments, allowed = await asyncio.gather(
+            self.moments.list_by_context(user_id, BUSINESS_CONTEXT),
+            self.workspaces.moment_ids_for_workspace(workspace_id),
+        )
+        visible = await self._visible_moments(
+            user_id,
+            workspace_id=workspace_id,
+            moments=moments,
+            allowed_ids=allowed,
+        )
         home = self._moments_home_payload_from_moments(visible)
         pulse = self._pulse_payload_from_moments(visible)
         return s.BusinessWorkspaceMomentsResponse(
@@ -434,37 +457,38 @@ class BusinessAppService:
                 **self.workspaces.map_workspace(ws, member)
             )
 
-        visible = await self._visible_moments(user_id, workspace_id=ws_id)
-        # Fallback for pre-workspace rows: if scoped inventory empty but user owns
-        # BUSINESS moments and has a selected workspace, show owned moments once.
-        # Reuse memberships already loaded above — only hit moments table once more.
-        if ws_id is not None and not visible:
-            mapped = await self.workspaces.moment_ids_for_workspace(ws_id)
-            if not mapped:
-                owned = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
-                visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
+        # Parallel independent reads; no write-on-GET module flip.
+        if ws_id is not None:
+            moments, allowed, member_count = await asyncio.gather(
+                self.moments.list_by_context(user_id, BUSINESS_CONTEXT),
+                self.workspaces.moment_ids_for_workspace(ws_id),
+                self.workspaces.count_active_members(ws_id),
+            )
+            visible = await self._visible_moments(
+                user_id,
+                workspace_id=ws_id,
+                moments=moments,
+                allowed_ids=allowed,
+            )
+        else:
+            visible = await self._visible_moments(user_id, workspace_id=None)
+            member_count = 0
 
         pulse = self._pulse_payload_from_moments(visible)
         home = self._moments_home_payload_from_moments(visible)
-        active_count = int(home.get("active_moment_count") or 0)
         open_for_dash = sum(
             1
             for m in visible
             if (m.status or "").lower() in ("active", "configured", "draft")
             or (m.status or "").upper() in _ACTIVE_STATUSES
         )
-        dashboard = s.BusinessDashboardSummary()
-        if ws_id is not None:
-            dash = await self.workspaces.dashboard_summary(
-                ws_id, open_moments=open_for_dash
-            )
-            dashboard = s.BusinessDashboardSummary(**dash)
-
-        if active_count > 0:
-            business_state = await self.modules.get_state(user_id, "BUSINESS")
-            current = (business_state.state if business_state is not None else "EMPTY") or "EMPTY"
-            if current.upper() == "EMPTY":
-                await self._flip_active(user_id)
+        dashboard = s.BusinessDashboardSummary(
+            open_moments=open_for_dash,
+            pending_approvals=0,
+            member_count=member_count,
+            revenue_today=None,
+            cash_balance=None,
+        )
         return s.BusinessSessionBootstrapResponse(
             pulse=s.BusinessPulseResponse(**pulse),
             moments_home=s.BusinessMomentsHomeResponse(**home),

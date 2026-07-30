@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -102,12 +102,14 @@ class BusinessWorkspaceService:
 
     async def count_active_members(self, workspace_id: UUID) -> int:
         result = await self.session.execute(
-            select(BusinessWorkspaceMembers).where(
+            select(func.count())
+            .select_from(BusinessWorkspaceMembers)
+            .where(
                 BusinessWorkspaceMembers.workspace_id == workspace_id,
                 BusinessWorkspaceMembers.status == "ACTIVE",
             )
         )
-        return len(list(result.scalars().all()))
+        return int(result.scalar_one() or 0)
 
     async def get_member(
         self, workspace_id: UUID, user_id: UUID
