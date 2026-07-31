@@ -103,6 +103,29 @@ class Settings(BaseSettings):
         validation_alias="MOMENTRA_APP_INVITE_BASE_URL",
     )
 
+    # Opaque invite codes (platform_invites)
+    invite_opaque_codes_enabled: bool = Field(
+        default=True, validation_alias="INVITE_OPAQUE_CODES_ENABLED"
+    )
+    invite_legacy_jwt_accept_enabled: bool = Field(
+        default=True, validation_alias="INVITE_LEGACY_JWT_ACCEPT_ENABLED"
+    )
+    invite_legacy_workspace_token_accept_enabled: bool = Field(
+        default=True, validation_alias="INVITE_LEGACY_WORKSPACE_TOKEN_ACCEPT_ENABLED"
+    )
+    invite_default_expiry_days: int = Field(
+        default=7, validation_alias="INVITE_DEFAULT_EXPIRY_DAYS"
+    )
+    invite_max_expiry_days: int = Field(
+        default=30, validation_alias="INVITE_MAX_EXPIRY_DAYS"
+    )
+    invite_code_length: int = Field(default=8, validation_alias="INVITE_CODE_LENGTH")
+    invite_code_pepper: str = Field(default="", validation_alias="INVITE_CODE_PEPPER")
+    invite_canonical_base_url: str = Field(
+        default="https://www.momentra.tech/invite",
+        validation_alias="INVITE_CANONICAL_BASE_URL",
+    )
+
     # Resend (group invite email). Env already uses MOMENTRA_RESEND_*.
     resend_api_key: str = Field(default="", validation_alias="MOMENTRA_RESEND_API_KEY")
     resend_from: str = Field(

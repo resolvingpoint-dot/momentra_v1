@@ -41,6 +41,9 @@ class MockSession:
             "business_operations_governance_rules": {},
             "business_operations_budget_categories": {},
             "auth_refresh_sessions": {},
+            "group_moments": {},
+            "group_moment_members": {},
+            "platform_invites": {},
         }
 
     def _get_from_store(self, store_name: str, key: str) -> Any:
@@ -266,6 +269,9 @@ class MockSession:
                 "business_operations_structure": ("operations_structure_id", "moment_id"),
                 "business_operations_governance_rules": ("operations_governance_id", "moment_id"),
                 "business_operations_budget_categories": ("budget_category_id", "allocation_id"),
+                "group_moments": ("moment_id",),
+                "group_moment_members": ("member_id",),
+                "platform_invites": ("id",),
             }
             for attr in preferred.get(table, ("id",)):
                 if hasattr(model, attr) and getattr(model, attr, None) is not None:

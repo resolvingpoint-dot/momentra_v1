@@ -240,6 +240,36 @@ class InviteService:
         *,
         participant_id: str | None = None,
     ) -> dict:
+        from app.domains.invites.platform_service import (
+            PlatformInviteService,
+            opaque_creates_enabled,
+        )
+
+        if opaque_creates_enabled():
+            minted = await PlatformInviteService(self.session).create_group_invite(
+                user_id,
+                moment_id,
+                metadata={"participant_id": participant_id} if participant_id else {},
+            )
+            moment = await self._require_owned_moment(user_id, moment_id)
+            name = moment.title or "Your moment"
+            link = minted["invite_url"]
+            subject, body, whatsapp, sms = _copy_ready(name, link)
+            return s.InviteDraftResponse(
+                invite_link=link,
+                invite_code=minted["code"],
+                qr_payload=link,
+                email_subject=subject,
+                email_body=body,
+                whatsapp_text=whatsapp,
+                sms_text=sms,
+                experience_name=name,
+                expires_at=minted["expires_at"],
+                invite_id=minted["invite_id"],
+                participant_id=participant_id,
+                status="sent",
+            ).model_dump(mode="json")
+
         moment = await self._require_owned_moment(user_id, moment_id)
         email, phone = self._guest_contact(moment, participant_id)
         existing = self._find_active(moment, participant_id=participant_id)
@@ -261,6 +291,16 @@ class InviteService:
         *,
         participant_id: str | None = None,
     ) -> dict:
+        from app.domains.invites.platform_service import (
+            PlatformInviteService,
+            opaque_creates_enabled,
+        )
+
+        if opaque_creates_enabled():
+            return await self.invite_draft(
+                user_id, moment_id, participant_id=participant_id
+            )
+
         moment = await self._require_owned_moment(user_id, moment_id)
         email, phone = self._guest_contact(moment, participant_id)
         self._revoke_active(moment, participant_id=participant_id)
@@ -470,6 +510,105 @@ class InviteService:
         )
         store.write_state(moment, state)
         return member_id
+
+    async def _upsert_group_roster_member(
+        self,
+        moment,
+        user_id: UUID,
+        *,
+        display_name: str = "Member",
+        member_id: str | None = None,
+    ) -> None:
+        """Best-effort ACTIVE row in ``group_moment_members`` (+ stub ``group_moments``).
+
+        Shared Group moments live primarily on ``moments`` + runtime JSON. Relational
+        roster FKs ``group_moments``; we upsert a stub when missing so inventory and
+        access gates that query ``GroupMomentMembers`` can see invitees. Failures are
+        ignored — runtime.members remains the canonical shared-moment roster.
+        """
+        from uuid import UUID as _UUID
+        from uuid import uuid4
+
+        from app.domains.group.models import GroupMomentMembers, GroupMoments
+
+        mid = moment.id
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        try:
+            gm_result = await self.session.execute(
+                select(GroupMoments).where(GroupMoments.moment_id == mid)
+            )
+            group_row = gm_result.scalar_one_or_none()
+        except Exception:
+            group_row = None
+
+        if group_row is None:
+            try:
+                self.session.add(
+                    GroupMoments(
+                        moment_id=mid,
+                        moment_type=str(moment.moment_type or "TRIP"),
+                        moment_profile="DEFAULT",
+                        moment_name=str(moment.title or "Group moment"),
+                        status=str(moment.status or "ACTIVE"),
+                        stage="CREATED",
+                        created_by=moment.user_id,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            except Exception:
+                return
+
+        try:
+            mem_result = await self.session.execute(
+                select(GroupMomentMembers).where(
+                    GroupMomentMembers.moment_id == mid,
+                    GroupMomentMembers.user_id == user_id,
+                )
+            )
+            existing = list(mem_result.scalars().all())
+        except Exception:
+            existing = []
+
+        active = next(
+            (
+                m
+                for m in existing
+                if (m.status or "").upper() not in {"LEFT", "REMOVED", "DECLINED"}
+                and m.left_at is None
+            ),
+            None,
+        )
+        if active is not None:
+            active.status = "ACTIVE"
+            active.joined_at = active.joined_at or now
+            active.display_name = display_name or active.display_name
+            return
+
+        try:
+            roster_id = (
+                _UUID(str(member_id))
+                if member_id
+                else uuid4()
+            )
+        except (ValueError, TypeError):
+            roster_id = uuid4()
+
+        try:
+            self.session.add(
+                GroupMomentMembers(
+                    member_id=roster_id,
+                    moment_id=mid,
+                    display_name=display_name or "Member",
+                    role_code="PARTICIPANT",
+                    status="ACTIVE",
+                    created_at=now,
+                    joined_at=now,
+                    user_id=user_id,
+                )
+            )
+        except Exception:
+            return
 
     async def _is_business_moment(self, moment) -> bool:
         from app.domains.business.models import BusinessMoments
@@ -757,6 +896,36 @@ class InviteService:
         ).model_dump(mode="json")
 
     async def accept(self, user_id: UUID, token: str) -> dict:
+        from app.domains.invites import codes as invite_codes
+        from app.domains.invites.platform_service import (
+            PlatformInviteService,
+            legacy_jwt_accept_enabled,
+        )
+
+        raw = (token or "").strip()
+        # Opaque codes must not fall through to JWT decode.
+        if invite_codes.is_opaque_code_shape(raw):
+            result = await PlatformInviteService(self.session).accept(user_id, raw)
+            # Normalize group opaque accept to InviteAcceptResponse shape when present.
+            if result.get("moment_id"):
+                return s.InviteAcceptResponse(
+                    moment_id=str(result["moment_id"]),
+                    moment_name=result.get("moment_name") or "Your moment",
+                    moment_type=result.get("moment_type"),
+                    already_member=bool(
+                        result.get("already_member")
+                        or result.get("result") == "ALREADY_MEMBER"
+                    ),
+                    participant_id=result.get("participant_id"),
+                ).model_dump(mode="json")
+            return result
+
+        if not legacy_jwt_accept_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invite",
+            )
+
         try:
             payload = decode_invite_token(token)
         except jwt.PyJWTError as exc:
@@ -852,6 +1021,12 @@ class InviteService:
                 user_id,
                 participant_id=str(participant_id) if participant_id else None,
                 email=str(email) if email else None,
+            )
+            await self._upsert_group_roster_member(
+                moment,
+                user_id,
+                display_name="Member",
+                member_id=attached_id,
             )
 
         store.update_item(

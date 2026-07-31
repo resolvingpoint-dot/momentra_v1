@@ -194,10 +194,122 @@ async def invite_workspace_member(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     from app.domains.business.workspace_service import BusinessWorkspaceService
+    from app.domains.invites.platform_service import (
+        PlatformInviteService,
+        opaque_creates_enabled,
+    )
+
+    # Prefer opaque company invites when enabled; keep email-bound legacy path as dual-write.
+    if opaque_creates_enabled():
+        opaque = await PlatformInviteService(db).create_company_invite(
+            user_id,
+            workspace_id,
+            role_code=body.role,
+            max_uses=1,
+        )
+        await db.commit()
+        return {
+            "invitation_id": opaque["invite_id"],
+            "workspace_id": str(workspace_id),
+            "invitee_email": body.email,
+            "role": (body.role or "MEMBER").upper(),
+            "token": opaque["code"],
+            "invite_link": opaque["invite_url"],
+            "qr_payload": opaque["qr_payload"],
+            "status": "PENDING",
+            "code": opaque["code"],
+            "expires_at": opaque["expires_at"],
+            "max_uses": opaque["max_uses"],
+        }
 
     result = await BusinessWorkspaceService(db).invite_member(
         user_id, workspace_id, email=body.email, role=body.role
     )
+    await db.commit()
+    return result
+
+
+@router.post(
+    "/workspaces/{workspace_id}/invites/opaque",
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_opaque_company_invite(
+    workspace_id: UUID,
+    body: dict = Body(default_factory=dict),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.domains.invites.platform_service import PlatformInviteService
+
+    result = await PlatformInviteService(db).create_company_invite(
+        user_id,
+        workspace_id,
+        role_code=str(body.get("role_code") or "MEMBER"),
+        expires_in_days=body.get("expires_in_days"),
+        max_uses=int(body.get("max_uses") or 1),
+    )
+    await db.commit()
+    return result
+
+
+@router.get("/workspaces/{workspace_id}/invites")
+async def list_workspace_invites(
+    workspace_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.domains.invites.platform_service import PlatformInviteService
+
+    items = await PlatformInviteService(db).list_workspace_invites(user_id, workspace_id)
+    return {"invites": items}
+
+
+@router.get("/company-invites/{code}")
+async def preview_company_invite(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Public preview — no auth required."""
+    from app.domains.invites.platform_service import PlatformInviteService
+
+    return await PlatformInviteService(db).preview(code)
+
+
+@router.post("/company-invites/{code}/accept")
+async def accept_company_invite_opaque(
+    code: str,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.domains.invites.platform_service import PlatformInviteService
+
+    result = await PlatformInviteService(db).accept(user_id, code)
+    await db.commit()
+    return result
+
+
+@router.post("/company-invites/{code}/decline")
+async def decline_company_invite_opaque(
+    code: str,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.domains.invites.platform_service import PlatformInviteService
+
+    result = await PlatformInviteService(db).decline(user_id, code)
+    await db.commit()
+    return result
+
+
+@router.post("/company-invites/by-id/{invite_id}/revoke")
+async def revoke_company_invite_opaque(
+    invite_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.domains.invites.platform_service import PlatformInviteService
+
+    result = await PlatformInviteService(db).revoke(user_id, invite_id)
     await db.commit()
     return result
 
@@ -209,6 +321,22 @@ async def accept_workspace_invite(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     from app.domains.business.workspace_service import BusinessWorkspaceService
+    from app.domains.invites import codes as invite_codes
+    from app.domains.invites.platform_service import (
+        PlatformInviteService,
+        legacy_workspace_token_accept_enabled,
+    )
+
+    token = (body.token or "").strip()
+    if invite_codes.is_opaque_code_shape(token):
+        result = await PlatformInviteService(db).accept(user_id, token)
+        await db.commit()
+        return result
+
+    if not legacy_workspace_token_accept_enabled():
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Invitation not found or already used.")
 
     result = await BusinessWorkspaceService(db).accept_invite(user_id, body.token)
     await db.commit()

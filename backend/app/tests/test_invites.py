@@ -131,7 +131,10 @@ def test_invite_draft_payload(mock_send, mock_verify, client: TestClient, mock_d
 
 
 @patch("app.dependencies.auth.verify_firebase_token")
-def test_invite_draft_reuses_active(mock_verify, client: TestClient, mock_db, sample_user: UserModel):
+@patch("app.domains.invites.platform_service.opaque_creates_enabled", return_value=False)
+def test_invite_draft_reuses_active(
+    _opaque_off, mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
     _auth(mock_verify)
     mock_db.add(sample_user)
     moment_id = _create_group_moment(client)
@@ -145,7 +148,10 @@ def test_invite_draft_reuses_active(mock_verify, client: TestClient, mock_db, sa
 
 
 @patch("app.dependencies.auth.verify_firebase_token")
-def test_invite_draft_refresh_rotates(mock_verify, client: TestClient, mock_db, sample_user: UserModel):
+@patch("app.domains.invites.platform_service.opaque_creates_enabled", return_value=False)
+def test_invite_draft_refresh_rotates(
+    _opaque_off, mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
     _auth(mock_verify)
     mock_db.add(sample_user)
     moment_id = _create_group_moment(client)
@@ -367,6 +373,15 @@ def test_business_invite_accept_binds_member(
     invite = mock_db._stores["business_moment_invitations"][str(invite_id)]
     assert invite.invite_status == "accepted"
 
+    boot = client.get("/api/v1/business/session/bootstrap", headers=AUTH)
+    assert boot.status_code == 200, boot.text
+    body = boot.json()
+    moment_ids = {
+        str(item.get("moment_id") or item.get("id") or "")
+        for item in body.get("moments") or []
+    }
+    assert str(moment_id) in moment_ids
+
 
 @patch("app.dependencies.auth.verify_firebase_token")
 def test_business_open_qr_accept_creates_member(
@@ -432,3 +447,66 @@ def test_business_open_qr_accept_creates_member(
     assert data["participant_id"]
     members = list(mock_db._stores["business_moment_members"].values())
     assert any(str(m.user_id) == str(guest.id) and m.member_status == "active" for m in members)
+
+
+@patch("app.dependencies.auth.verify_firebase_token")
+def test_group_invite_accept_shows_in_invitee_inventory(
+    mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
+    """Second user accept must surface the moment on Group session inventory."""
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from app.domains.group import moment_store as store
+
+    _auth(mock_verify)
+    mock_db.add(sample_user)
+    moment_id = _create_group_moment(client)
+
+    activate = client.post(
+        f"/api/v1/group/setup/moments/{moment_id}/activate",
+        headers=AUTH,
+    )
+    assert activate.status_code == 200, activate.text
+
+    share = client.get(f"/api/v1/moments/{moment_id}/share-invite", headers=AUTH)
+    assert share.status_code == 200, share.text
+    token = share.json()["invite_url"].rsplit("/", 1)[-1]
+
+    now = datetime.now(timezone.utc)
+    invitee = UserModel(
+        id=uuid4(),
+        firebase_uid="invitee456",
+        email="invitee@example.com",
+        display_name="Invitee",
+        created_at=now,
+        updated_at=now,
+        last_login_at=now,
+    )
+    mock_db.add(invitee)
+
+    mock_verify.return_value = {
+        "uid": "invitee456",
+        "email": "invitee@example.com",
+        "name": "Invitee",
+    }
+    accepted = client.post(f"/api/v1/invites/{token}/accept", headers=AUTH)
+    assert accepted.status_code == 200, accepted.text
+    data = accepted.json()
+    assert data["moment_id"] == moment_id
+    assert data["already_member"] is False
+
+    moment = mock_db._stores["moments"][moment_id]
+    members = store.list_accepted_members(moment)
+    assert any(str(m.get("user_id")) == str(invitee.id) for m in members)
+
+    roster = list(mock_db._stores.get("group_moment_members", {}).values())
+    assert any(str(getattr(r, "user_id", "")) == str(invitee.id) for r in roster)
+
+    boot = client.get("/api/v1/group/session/bootstrap", headers=AUTH)
+    assert boot.status_code == 200, boot.text
+    body = boot.json()
+    moment_ids = {str(item.get("id") or "") for item in body.get("moments") or []}
+    assert moment_id in moment_ids
+    assert body.get("active_moment_id") == moment_id or body.get("is_empty") is False
+    assert body.get("active_moment_count", 0) >= 1

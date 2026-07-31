@@ -139,12 +139,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.exclude_paths:
             return await call_next(request)
 
-        allowed = await check_rate_limit(request, self.max_requests, self.window_seconds)
+        max_req = self.max_requests
+        window = self.window_seconds
+        path = request.url.path or ""
+        # Stricter throttle for invite preview/accept (brute-force codes).
+        if "/company-invites/" in path or path.startswith("/api/v1/invites/"):
+            max_req = min(max_req, 20)
+            window = min(window, 60)
+
+        allowed = await check_rate_limit(request, max_req, window)
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests",
-                headers={"Retry-After": str(self.window_seconds)},
+                headers={"Retry-After": str(window)},
             )
 
         return await call_next(request)

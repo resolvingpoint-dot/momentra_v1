@@ -376,6 +376,36 @@ class BusinessWorkspaceService:
             "status": "PENDING",
         }
 
+    async def upsert_member_from_invite(
+        self,
+        *,
+        workspace_id: UUID,
+        user_id: UUID,
+        role: str = "MEMBER",
+    ) -> BusinessWorkspaceMembers:
+        """Create or reactivate workspace membership (opaque company invite)."""
+        existing = await self.get_member(workspace_id, user_id)
+        now = _now()
+        role_u = (role or "MEMBER").upper()
+        if existing is None:
+            member = BusinessWorkspaceMembers(
+                member_id=uuid4(),
+                workspace_id=workspace_id,
+                user_id=user_id,
+                role=role_u,
+                status="ACTIVE",
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(member)
+            await self.session.flush()
+            return member
+        existing.status = "ACTIVE"
+        existing.role = role_u or (existing.role or "MEMBER").upper()
+        existing.updated_at = now
+        await self.session.flush()
+        return existing
+
     async def accept_invite(self, user_id: UUID, token: str) -> dict:
         result = await self.session.execute(
             select(BusinessWorkspaceInvitations).where(
