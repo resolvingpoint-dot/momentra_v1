@@ -908,16 +908,25 @@ class InviteService:
             result = await PlatformInviteService(self.session).accept(user_id, raw)
             # Normalize group opaque accept to InviteAcceptResponse shape when present.
             if result.get("moment_id"):
-                return s.InviteAcceptResponse(
+                already = bool(
+                    result.get("already_member")
+                    or result.get("result") in {"ALREADY_MEMBER", "ALREADY_ACCEPTED"}
+                )
+                outcome = str(
+                    result.get("result")
+                    or ("ALREADY_MEMBER" if already else "ACCEPTED")
+                )
+                payload = s.InviteAcceptResponse(
                     moment_id=str(result["moment_id"]),
                     moment_name=result.get("moment_name") or "Your moment",
                     moment_type=result.get("moment_type"),
-                    already_member=bool(
-                        result.get("already_member")
-                        or result.get("result") == "ALREADY_MEMBER"
-                    ),
+                    already_member=already,
                     participant_id=result.get("participant_id"),
                 ).model_dump(mode="json")
+                payload["result"] = outcome
+                payload["invite_type"] = result.get("invite_type") or "GROUP"
+                payload["target_id"] = str(result["moment_id"])
+                return payload
             return result
 
         if not legacy_jwt_accept_enabled():

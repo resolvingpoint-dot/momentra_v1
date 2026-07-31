@@ -154,8 +154,8 @@ class GroupAppService:
     async def _load_moment_inventories(
         self, user_id: UUID
     ) -> tuple[list[MomentModel], list[MomentModel], list[MomentModel], list[MomentModel]]:
-        """One list_by_context per request — visible, active, replacement slices."""
-        all_moments = await self.moments.list_by_context(user_id, GROUP_CONTEXT)
+        """One inventory pass per request — owned ∪ member-accessible moments."""
+        all_moments = await self.moments.list_group_accessible(user_id)
         visible = [m for m in all_moments if _moment_is_visible(m)]
         active = [m for m in visible if _moment_is_active(m)]
         replacement = [m for m in all_moments if _norm_status(m.status) != "ARCHIVED"]
