@@ -21,8 +21,16 @@ def _change_percent(current: int, prior: int) -> float:
     return round(((current - prior) / prior) * 100, 2)
 
 
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def _event_window_count(activities: list[dict], action_type: str, start: datetime, end: datetime) -> int:
     count = 0
+    start_utc = _as_utc(start)
+    end_utc = _as_utc(end)
     for a in activities:
         if (a.get("action_type") or "") != action_type:
             continue
@@ -33,7 +41,7 @@ def _event_window_count(activities: list[dict], action_type: str, start: datetim
             occurred = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
         except ValueError:
             continue
-        if start <= occurred < end:
+        if start_utc <= _as_utc(occurred) < end_utc:
             count += 1
     return count
 

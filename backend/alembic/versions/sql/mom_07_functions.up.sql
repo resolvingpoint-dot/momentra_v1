@@ -9623,23 +9623,52 @@ CREATE OR REPLACE FUNCTION sp_write_business_operations_audit(
 																RETURNS VOID
 																LANGUAGE plpgsql
 																AS $$
+																DECLARE
+																    v_name VARCHAR(255);
+																    v_change VARCHAR(50);
 																BEGIN
+																
+																    SELECT COALESCE(NULLIF(TRIM(display_name), ''), NULLIF(TRIM(email), ''), 'User')
+																      INTO v_name
+																      FROM users
+																     WHERE id = p_changed_by
+																     LIMIT 1;
+																
+																    v_name := COALESCE(v_name, 'User');
+																    v_change := LOWER(COALESCE(p_change_type, 'create'));
+																    IF v_change IN ('created', 'insert') THEN
+																        v_change := 'create';
+																    ELSIF v_change IN ('updated', 'update') THEN
+																        v_change := 'edit';
+																    ELSIF v_change NOT IN (
+																        'create', 'edit', 'delete', 'restore', 'approve', 'reject', 'resolve'
+																    ) THEN
+																        v_change := 'edit';
+																    END IF;
 																
 																    INSERT INTO business_audit_history (
 																        moment_id,
-																        entity_type,
-																        entity_id,
-																        action_type,
+																        source_table,
+																        source_record_id,
+																        field_name,
+																        old_value,
+																        new_value,
+																        change_type,
 																        changed_by,
-																        change_summary,
+																        changed_by_name,
+																        change_reason,
 																        changed_at
 																    )
 																    VALUES (
 																        p_moment_id,
-																        p_entity_type,
+																        COALESCE(NULLIF(TRIM(p_entity_type), ''), 'operations'),
 																        p_record_id,
-																        p_change_type,
+																        'status',
+																        NULL,
+																        COALESCE(NULLIF(TRIM(p_change_summary), ''), v_change),
+																        v_change,
 																        p_changed_by,
+																        v_name,
 																        p_change_summary,
 																        CURRENT_TIMESTAMP
 																    );
