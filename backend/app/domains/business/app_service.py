@@ -155,7 +155,7 @@ class BusinessAppService:
         owned = (
             moments
             if moments is not None
-            else await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
+            else await self.moments.list_business_accessible(user_id)
         )
         visible = [m for m in owned if m.status in _VISIBLE_STATUSES]
         if workspace_id is None:
@@ -176,7 +176,7 @@ class BusinessAppService:
         return await self.workspaces.resolve_selected(user_id, workspace_id=workspace_id)
 
     async def _inventory_for_replacement(self, user_id: UUID) -> list[MomentModel]:
-        moments = await self.moments.list_by_context(user_id, BUSINESS_CONTEXT)
+        moments = await self.moments.list_business_accessible(user_id)
         return [m for m in moments if (m.status or "").upper() != "ARCHIVED"]
 
     def _latest_by_code(self, moments: list[MomentModel]) -> dict[str, MomentModel]:
@@ -206,9 +206,9 @@ class BusinessAppService:
         return best
 
     async def _require_moment(self, user_id: UUID, moment_id: UUID) -> MomentModel:
-        moment = await self.moments.get_by_user_and_id(user_id, moment_id)
-        if moment is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Moment not found")
+        from app.domains.business.access import require_business_moment_access
+
+        moment = await require_business_moment_access(self.session, user_id, moment_id)
         if (moment.context_type or "").upper() != BUSINESS_CONTEXT:
             raise deny_access(
                 context_type=BUSINESS_CONTEXT,
@@ -384,7 +384,7 @@ class BusinessAppService:
     async def get_workspace_overview(self, user_id: UUID, workspace_id: UUID) -> dict:
         await self.workspaces.require_member(workspace_id, user_id)
         moments, allowed, member_count = await asyncio.gather(
-            self.moments.list_by_context(user_id, BUSINESS_CONTEXT),
+            self.moments.list_business_accessible(user_id),
             self.workspaces.moment_ids_for_workspace(workspace_id),
             self.workspaces.count_active_members(workspace_id),
         )
@@ -417,7 +417,7 @@ class BusinessAppService:
     async def get_workspace_moments(self, user_id: UUID, workspace_id: UUID) -> dict:
         await self.workspaces.require_member(workspace_id, user_id)
         moments, allowed = await asyncio.gather(
-            self.moments.list_by_context(user_id, BUSINESS_CONTEXT),
+            self.moments.list_business_accessible(user_id),
             self.workspaces.moment_ids_for_workspace(workspace_id),
         )
         visible = await self._visible_moments(
@@ -460,7 +460,7 @@ class BusinessAppService:
         # Parallel independent reads; no write-on-GET module flip.
         if ws_id is not None:
             moments, allowed, member_count = await asyncio.gather(
-                self.moments.list_by_context(user_id, BUSINESS_CONTEXT),
+                self.moments.list_business_accessible(user_id),
                 self.workspaces.moment_ids_for_workspace(ws_id),
                 self.workspaces.count_active_members(ws_id),
             )

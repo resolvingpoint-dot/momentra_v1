@@ -187,6 +187,52 @@ class MomentRepository:
 
         return sorted(by_id.values(), key=_sort_key, reverse=True)
 
+    async def list_business_accessible(self, user_id: UUID) -> list[MomentModel]:
+        """Business inventory: owned moments ∪ active/configured members.
+
+        Membership is resolved from ``business_moment_members`` (invite accept
+        and setup roster). Matches Group's ``list_group_accessible`` contract.
+        """
+        from app.domains.business.models import BusinessMomentMembers
+
+        owned = await self.list_by_context(user_id, "BUSINESS")
+        by_id: dict[UUID, MomentModel] = {m.id: m for m in owned}
+
+        _allowed = frozenset({"active", "configured"})
+        try:
+            result = await self.session.execute(
+                select(BusinessMomentMembers).where(
+                    BusinessMomentMembers.user_id == user_id,
+                )
+            )
+            roster_rows = list(result.scalars().all())
+        except Exception:
+            roster_rows = []
+
+        for row in roster_rows:
+            mid = row.moment_id
+            if mid in by_id:
+                continue
+            status_val = (row.member_status or "").lower()
+            if status_val not in _allowed:
+                continue
+            moment = await self.get_by_id(mid)
+            if moment is None:
+                continue
+            if (moment.context_type or "").upper() != "BUSINESS":
+                continue
+            by_id[moment.id] = moment
+
+        def _sort_key(m: MomentModel) -> datetime:
+            created = m.created_at
+            if created is None:
+                return datetime(1970, 1, 1, tzinfo=timezone.utc)
+            if created.tzinfo is None:
+                return created.replace(tzinfo=timezone.utc)
+            return created
+
+        return sorted(by_id.values(), key=_sort_key, reverse=True)
+
     async def delete_owned(self, user_id: UUID, moment_id: UUID) -> bool:
         moment = await self.get_by_user_and_id(user_id, moment_id)
         if moment is None:

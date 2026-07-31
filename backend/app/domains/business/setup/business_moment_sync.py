@@ -129,7 +129,12 @@ async def ensure_business_moment(
     answers: dict | None = None,
     workspace_id: UUID | None = None,
 ) -> UUID:
-    """Upsert ``business_moments`` using the same id as the shared moment."""
+    """Upsert ``business_moments`` using the same id as the shared moment.
+
+    When ``workspace_id`` is omitted and a row already exists, keep the existing
+    company binding — do not silently reassign to the owner's oldest workspace
+    (that hid moments from workspace-scoped client inventory after activate).
+    """
     owner_id = owner_user_id or shared_moment.user_id
     code = normalize_moment_type_code(shared_moment.moment_type or "") or (
         shared_moment.moment_type or ""
@@ -144,17 +149,23 @@ async def ensure_business_moment(
         or "Team Operations"
     )
 
-    resolved_workspace_id = await ensure_owner_business_workspace(
-        session,
-        owner_id,
-        name=str(answers.get("team_name") or display_name)[:255],
-        workspace_id=workspace_id,
-    )
-
     result = await session.execute(
         select(BusinessMoments).where(BusinessMoments.moment_id == moment_id)
     )
     existing = result.scalar_one_or_none()
+
+    # Prefer explicit arg; else preserve existing binding; else resolve/create.
+    bind_workspace_id = workspace_id
+    if bind_workspace_id is None and existing is not None and existing.workspace_id is not None:
+        bind_workspace_id = existing.workspace_id
+
+    resolved_workspace_id = await ensure_owner_business_workspace(
+        session,
+        owner_id,
+        name=str(answers.get("team_name") or display_name)[:255],
+        workspace_id=bind_workspace_id,
+    )
+
     now = _now()
     biz_status = _SHARED_TO_BUSINESS_STATUS.get(shared_moment.status or "DRAFT", "draft")
 

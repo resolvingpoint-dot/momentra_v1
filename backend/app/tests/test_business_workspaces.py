@@ -152,6 +152,78 @@ def test_workspace_api_create_and_bootstrap(
     assert any(m["moment_id"] == moment_id for m in moments)
 
 
+@pytest.mark.asyncio
+async def test_ensure_business_moment_preserves_workspace_on_activate(mock_db):
+    """Activate without workspace_id must not reassign to the owner's oldest company."""
+    from app.domains.business.models import BusinessWorkspaces
+    from app.domains.business.setup.business_moment_sync import ensure_business_moment
+    from app.domains.moments.models import MomentModel
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    older = BusinessWorkspaces(
+        workspace_id=uuid4(),
+        owned_by=MOCK_USER_ID,
+        created_by=MOCK_USER_ID,
+        name="Company A",
+        status="ACTIVE",
+        currency_code="INR",
+        timezone="Asia/Kolkata",
+        created_at=now,
+        updated_at=now,
+    )
+    newer = BusinessWorkspaces(
+        workspace_id=uuid4(),
+        owned_by=MOCK_USER_ID,
+        created_by=MOCK_USER_ID,
+        name="Company B",
+        status="ACTIVE",
+        currency_code="INR",
+        timezone="Asia/Kolkata",
+        created_at=now,
+        updated_at=now,
+    )
+    mock_db.add(older)
+    mock_db.add(newer)
+
+    moment_id = uuid4()
+    moment = MomentModel(
+        id=moment_id,
+        user_id=MOCK_USER_ID,
+        context_type="BUSINESS",
+        moment_type="BUSINESS_OPERATIONS",
+        title="Ops Co",
+        status="DRAFT",
+        setup_state="SETUP",
+        created_at=now,
+        updated_at=now,
+    )
+    mock_db.add(moment)
+
+    await ensure_business_moment(
+        mock_db,
+        moment,
+        owner_user_id=MOCK_USER_ID,
+        answers={"moment_name": "Ops Co"},
+        workspace_id=newer.workspace_id,
+    )
+    store = mock_db._stores["business_moments"]
+    row = store.get(moment_id) or store.get(str(moment_id))
+    assert row is not None
+    assert row.workspace_id == newer.workspace_id
+
+    moment.status = "ACTIVE"
+    await ensure_business_moment(
+        mock_db,
+        moment,
+        owner_user_id=MOCK_USER_ID,
+        answers={"moment_name": "Ops Co"},
+    )
+    healed = store.get(moment_id) or store.get(str(moment_id))
+    assert healed is not None
+    assert healed.workspace_id == newer.workspace_id
+    assert healed.status == "active"
+
+
 @patch("app.dependencies.auth.verify_firebase_token")
 def test_owner_can_update_workspace(
     mock_verify, client: TestClient, mock_db, sample_user: UserModel
