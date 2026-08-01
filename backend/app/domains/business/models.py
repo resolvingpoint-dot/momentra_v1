@@ -1457,7 +1457,7 @@ class OperationsApprovalRequests(Base):
         CheckConstraint('amount IS NULL OR amount >= 0::numeric', name='chk_operations_approval_amount'),
         CheckConstraint("approval_status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'cancelled'::character varying, 'archived'::character varying]::text[])", name='chk_operations_approval_status'),
         CheckConstraint("priority::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying]::text[])", name='chk_operations_approval_priority'),
-        CheckConstraint("request_type::text = ANY (ARRAY['expense_approval'::character varying, 'vendor_approval'::character varying, 'budget_change'::character varying, 'policy_exception'::character varying, 'operational_request'::character varying]::text[])", name='chk_operations_approval_request_type'),
+        CheckConstraint("request_type::text = ANY (ARRAY['expense_approval'::character varying, 'vendor_approval'::character varying, 'budget_change'::character varying, 'policy_exception'::character varying, 'operational_request'::character varying, 'hiring'::character varying, 'contract'::character varying, 'purchase'::character varying, 'other'::character varying]::text[])", name='chk_operations_approval_request_type'),
         ForeignKeyConstraint(['linked_spend_entry_id'], ['operations_spend_entries.spend_entry_id'], name='fk_operations_approval_spend'),
         ForeignKeyConstraint(['moment_id'], ['business_moments.moment_id'], name='fk_operations_approval_moment'),
         PrimaryKeyConstraint('operations_approval_id', name='operations_approval_requests_pkey'),
@@ -1481,6 +1481,8 @@ class OperationsApprovalRequests(Base):
     currency: Mapped[Optional[str]] = mapped_column(String(10))
     linked_spend_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     approver_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    approver_ids: Mapped[Optional[list]] = mapped_column(JSONB)
+    due_date: Mapped[Optional[datetime.date]] = mapped_column(Date)
     decision_note: Mapped[Optional[str]] = mapped_column(Text)
     decided_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     decided_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
@@ -1656,7 +1658,7 @@ class RunwayCashInflows(Base):
         CheckConstraint('amount > 0::numeric', name='chk_runway_cash_inflow_amount'),
         CheckConstraint('amount_in_operating_currency >= 0::numeric', name='chk_runway_cash_inflow_converted_amount'),
         CheckConstraint('exchange_rate_to_operating_currency > 0::numeric', name='chk_runway_cash_inflow_fx'),
-        CheckConstraint("inflow_type::text = ANY (ARRAY['revenue_collected'::character varying, 'investor_funding'::character varying, 'owner_contribution'::character varying, 'bank_loan'::character varying, 'government_grant'::character varying, 'customer_advance'::character varying, 'other'::character varying]::text[])", name='chk_runway_cash_inflow_type'),
+        CheckConstraint("inflow_type::text = ANY (ARRAY['revenue_collected'::character varying, 'investor_funding'::character varying, 'owner_contribution'::character varying, 'bank_loan'::character varying, 'government_grant'::character varying, 'customer_advance'::character varying, 'refund'::character varying, 'other'::character varying]::text[])", name='chk_runway_cash_inflow_type'),
         ForeignKeyConstraint(['moment_id'], ['business_moments.moment_id'], name='fk_runway_cash_inflow_moment'),
         PrimaryKeyConstraint('cash_inflow_id', name='runway_cash_inflows_pkey'),
         Index('idx_runway_cash_inflows_date', 'inflow_date'),
@@ -1693,7 +1695,7 @@ class RunwayExpenseBurns(Base):
         CheckConstraint('amount_in_operating_currency >= 0::numeric', name='chk_runway_expense_converted_amount'),
         CheckConstraint("approval_status::text = ANY (ARRAY['not_required'::character varying, 'pending'::character varying, 'approved'::character varying, 'rejected'::character varying]::text[])", name='chk_runway_expense_approval_status'),
         CheckConstraint('exchange_rate_to_operating_currency > 0::numeric', name='chk_runway_expense_fx'),
-        CheckConstraint("expense_category::text = ANY (ARRAY['salaries'::character varying, 'marketing'::character varying, 'technology'::character varying, 'operations'::character varying, 'vendor'::character varying, 'inventory'::character varying, 'taxes'::character varying, 'other'::character varying]::text[])", name='chk_runway_expense_category'),
+        CheckConstraint("expense_category::text = ANY (ARRAY['salaries'::character varying, 'rent'::character varying, 'marketing'::character varying, 'technology'::character varying, 'operations'::character varying, 'legal'::character varying, 'travel'::character varying, 'insurance'::character varying, 'vendor'::character varying, 'inventory'::character varying, 'taxes'::character varying, 'other'::character varying]::text[])", name='chk_runway_expense_category'),
         CheckConstraint("priority::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying]::text[])", name='chk_runway_expense_priority'),
         ForeignKeyConstraint(['moment_id'], ['business_moments.moment_id'], name='fk_runway_expense_moment'),
         PrimaryKeyConstraint('expense_id', name='runway_expense_burns_pkey'),

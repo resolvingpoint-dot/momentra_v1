@@ -15,6 +15,20 @@ from app.domains.business.models import (
     OperationsSpendEntries,
 )
 
+_SPEND_CATEGORIES = {
+    "purchase",
+    "vendor_payment",
+    "staff_cost",
+    "utility_bill",
+    "maintenance",
+    "marketing_spend",
+    "inventory_refill",
+    "service_charge",
+    "travel_expense",
+    "rent",
+    "other",
+}
+
 
 async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: dict[str, Any]) -> UUID:
     currency = str(payload.get("currency_code") or payload.get("currency") or "INR")
@@ -55,12 +69,19 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         await session.flush()
         budget_category_id = cat.budget_category_id
 
+    spend_category = str(payload.get("spend_category") or "other").lower()
+    if spend_category not in _SPEND_CATEGORIES:
+        spend_category = "other"
+
+    notes = payload.get("description") or payload.get("notes")
+    vendor = (payload.get("vendor_name") or "").strip() or None
+
     row = OperationsSpendEntries(
         moment_id=event.business_moment_id,
         event_id=event.event_id,
         spend_name=payload.get("title") or event.title,
         budget_category_id=budget_category_id,
-        spend_category=payload.get("spend_category", "other"),
+        spend_category=spend_category,
         currency=currency,
         amount=safe_amount,
         amount_minor=int(amount_minor or 0),
@@ -69,7 +90,8 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         spend_date=parse_date(payload.get("spend_date")),
         priority=payload.get("priority", "medium"),
         created_by=event.created_by,
-        description=payload.get("description"),
+        vendor_name=vendor,
+        description=notes,
         is_voided=False,
     )
     session.add(row)

@@ -47,3 +47,4 @@ class OpsContext(BusinessProjectionContext):
     activated_at: str | None = None
     projection: OpsProjectionBundle | None = None
     stage_timings_ms: dict[str, float] = field(default_factory=dict)
+    member_picker: list[dict[str, Any]] = field(default_factory=list)

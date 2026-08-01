@@ -155,6 +155,15 @@ class OpsTemplateBuilder:
         )
         member_rows = list(members.scalars().all())
         member_count = len(member_rows)
+        member_picker = [
+            {
+                "member_id": str(m.member_id),
+                "name": m.name,
+                "role": m.role,
+                "user_id": str(m.user_id) if m.user_id else None,
+            }
+            for m in member_rows
+        ]
         owner = next(
             (
                 m
@@ -198,7 +207,13 @@ class OpsTemplateBuilder:
         )
         approval_rows = list(approval_q.scalars().all())
         pending_approvals = sum(1 for a in approval_rows if (a.approval_status or "") == "pending")
-        overdue_approval_count = 0  # no due_date column on operations_approval_requests v1
+        overdue_approval_count = sum(
+            1
+            for a in approval_rows
+            if (a.approval_status or "") == "pending"
+            and getattr(a, "due_date", None) is not None
+            and a.due_date < today
+        )
         approved_recently = sum(
             1
             for a in approval_rows
@@ -352,6 +367,7 @@ class OpsTemplateBuilder:
             completed_improvement_count=completed,
             activated_at=str(moment.activated_at) if getattr(moment, "activated_at", None) else None,
             stage_timings_ms=timings,
+            member_picker=member_picker,
         )
         ctx.projection = refresh_ops_projections(ctx)
         _stage(timings, "mapping", t)

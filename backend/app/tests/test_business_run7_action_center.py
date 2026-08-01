@@ -15,10 +15,10 @@ from app.domains.business.action_catalog import (
 def test_catalog_counts_match_brief():
     assert len(TEAM_OPERATIONS_CATALOG) == 10
     assert len(RUNWAY_CATALOG) == 5
-    assert len(OPERATIONS_CATALOG) == 5
+    assert len(OPERATIONS_CATALOG) == 6
     assert len(catalog_for_moment_type("TEAM_OPERATIONS")) == 10
     assert len(catalog_for_moment_type("BUSINESS_RUNWAY")) == 5
-    assert len(catalog_for_moment_type("BUSINESS_OPERATIONS")) == 5
+    assert len(catalog_for_moment_type("BUSINESS_OPERATIONS")) == 6
 
 
 def test_catalog_payload_has_categories_and_renderer_ids():
@@ -52,12 +52,25 @@ def test_runway_and_ops_labels():
         moment_id="m", moment_type="BUSINESS_OPERATIONS"
     )
     assert {a["label"] for a in ops["actions"]} >= {
-        "Spend Entry",
-        "Vendor Update",
-        "Approval",
+        "Spend entry",
+        "Vendor update",
+        "Approval request",
         "Issue",
-        "Operational Improvement",
+        "Operational improvement",
+        "General update",
     }
+    assert all(a.get("subtitle") for a in ops["actions"])
+    approval = next(a for a in ops["actions"] if a["action_id"] == "ops_approval")
+    assert approval["cta_label"] == "Send approval request"
+
+
+def test_ops_approval_fields_include_approvers():
+    meta = build_renderer_metadata("BUSINESS_OPERATIONS", "ops_approval")
+    assert meta is not None
+    keys = {f["key"] for f in meta["fields"]}
+    assert "approver_ids" in keys
+    assert "request_type" in keys
+    assert "approver_ids" in meta["required_fields"]
 
 
 def test_renderer_metadata_by_action_id_and_type():

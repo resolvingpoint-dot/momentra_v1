@@ -52,8 +52,14 @@ def wrap_mutation_response(
     activity: dict[str, Any],
     *,
     op: Literal["create", "patch", "delete"] = "create",
+    notify: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "activity": activity,
         "projection_hint": build_projection_hint(activity, op=op),
     }
+    if notify:
+        out["notify"] = notify
+        # Surface count for Action Center toast (approvals / owners)
+        out["notifications_created"] = int(notify.get("notifications_created") or 0)
+    return out

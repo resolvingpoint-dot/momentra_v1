@@ -169,6 +169,14 @@ _REGISTRY: dict[ActionType, dict] = {
         "editable": True,
         "deletable": True,
     },
+    ActionType.OPS_GENERAL_UPDATE: {
+        "handler": "app.domains.business.activity.handlers.business_operations.general_update",
+        "permission": "can_add_operations_records",
+        "typed_table": None,
+        "affected_slices": ("pulse", "moments"),
+        "editable": True,
+        "deletable": True,
+    },
 }
 
 ACTION_REGISTRY: MappingProxyType[ActionType, dict] = MappingProxyType(_REGISTRY)

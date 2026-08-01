@@ -172,6 +172,16 @@ class BusinessActivityEngine:
                     op="create",
                 )
 
+        from app.domains.business.activity.catalog_validation import (
+            validate_payload_against_catalog,
+        )
+
+        validate_payload_against_catalog(
+            moment_type=moment_type_code,
+            action_type=at.value,
+            payload=payload,
+        )
+
         event_id = uuid4()
         event = await insert_event(
             self.session,
@@ -204,6 +214,28 @@ class BusinessActivityEngine:
             after_payload={"action_type": at.value, "title": title, "payload": payload or {}},
         )
 
+        notify_summary: dict[str, Any] = {}
+        from app.domains.business.activity.types import (
+            BUSINESS_OPERATIONS_ACTIONS,
+            BUSINESS_RUNWAY_ACTIONS,
+        )
+
+        if at in BUSINESS_OPERATIONS_ACTIONS or at in BUSINESS_RUNWAY_ACTIONS:
+            from app.domains.business.activity.business_notify_policy import (
+                apply_business_notify_policy,
+            )
+
+            notify_summary = await apply_business_notify_policy(
+                self.session,
+                action_type=at,
+                moment_id=moment_id,
+                actor_user_id=user_id,
+                event_id=event_id,
+                typed_row_id=typed_row_id,
+                title=title,
+                payload=payload,
+            )
+
         from app.domains.business.activity.projection_hint import wrap_mutation_response
         from app.domains.business.projection_cache import invalidate_business_projections
 
@@ -212,7 +244,9 @@ class BusinessActivityEngine:
         )
 
         activity = _to_dto(event, viewer_id=user_id, member=member, typed_row_id=typed_row_id)
-        return wrap_mutation_response(activity, op="create")
+        return wrap_mutation_response(
+            activity, op="create", notify=notify_summary or None
+        )
 
     async def get(self, user_id: UUID, moment_id: UUID, event_id: UUID) -> dict:
         await self._require_moment(moment_id)
