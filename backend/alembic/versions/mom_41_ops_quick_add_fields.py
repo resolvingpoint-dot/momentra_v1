@@ -2,6 +2,8 @@
 
 Revision ID: mom_41_ops_quick_add_fields
 Revises: mom_40_fix_ops_audit_columns
+
+Note: asyncpg rejects multi-statement prepared SQL — one op.execute per statement.
 """
 from typing import Sequence, Union
 
@@ -15,19 +17,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute(
-        """
-        ALTER TABLE operations_approval_requests
-            ADD COLUMN IF NOT EXISTS approver_ids JSONB;
-
-        ALTER TABLE operations_approval_requests
-            ADD COLUMN IF NOT EXISTS due_date DATE;
-        """
+        "ALTER TABLE operations_approval_requests ADD COLUMN IF NOT EXISTS approver_ids JSONB"
     )
-    # Expand request_type CHECK for Quick Add approval types.
+    op.execute(
+        "ALTER TABLE operations_approval_requests ADD COLUMN IF NOT EXISTS due_date DATE"
+    )
+
+    op.execute(
+        "ALTER TABLE operations_approval_requests DROP CONSTRAINT IF EXISTS chk_operations_approval_request_type"
+    )
     op.execute(
         """
-        ALTER TABLE operations_approval_requests
-            DROP CONSTRAINT IF EXISTS chk_operations_approval_request_type;
         ALTER TABLE operations_approval_requests
             ADD CONSTRAINT chk_operations_approval_request_type
             CHECK (
@@ -42,14 +42,15 @@ def upgrade() -> None:
                     'purchase',
                     'other'
                 )
-            );
+            )
         """
     )
-    # Spend: add rent alias used by Quick Add category picker.
+
+    op.execute(
+        "ALTER TABLE operations_spend_entries DROP CONSTRAINT IF EXISTS chk_operations_spend_category"
+    )
     op.execute(
         """
-        ALTER TABLE operations_spend_entries
-            DROP CONSTRAINT IF EXISTS chk_operations_spend_category;
         ALTER TABLE operations_spend_entries
             ADD CONSTRAINT chk_operations_spend_category
             CHECK (
@@ -66,14 +67,15 @@ def upgrade() -> None:
                     'rent',
                     'other'
                 )
-            );
+            )
         """
     )
-    # Vendor event types used by Quick Add.
+
+    op.execute(
+        "ALTER TABLE operations_vendor_updates DROP CONSTRAINT IF EXISTS chk_operations_vendor_event_type"
+    )
     op.execute(
         """
-        ALTER TABLE operations_vendor_updates
-            DROP CONSTRAINT IF EXISTS chk_operations_vendor_event_type;
         ALTER TABLE operations_vendor_updates
             ADD CONSTRAINT chk_operations_vendor_event_type
             CHECK (
@@ -89,14 +91,15 @@ def upgrade() -> None:
                     'contact_update',
                     'other'
                 )
-            );
+            )
         """
     )
-    # Improvement expected impact: increase_revenue.
+
+    op.execute(
+        "ALTER TABLE operations_improvements DROP CONSTRAINT IF EXISTS chk_operations_improvement_expected_impact"
+    )
     op.execute(
         """
-        ALTER TABLE operations_improvements
-            DROP CONSTRAINT IF EXISTS chk_operations_improvement_expected_impact;
         ALTER TABLE operations_improvements
             ADD CONSTRAINT chk_operations_improvement_expected_impact
             CHECK (
@@ -110,14 +113,15 @@ def upgrade() -> None:
                     'increase_revenue',
                     'other'
                 )
-            );
+            )
         """
     )
-    # Improvement types used by Quick Add (vendor management alias).
+
+    op.execute(
+        "ALTER TABLE operations_improvements DROP CONSTRAINT IF EXISTS chk_operations_improvement_type"
+    )
     op.execute(
         """
-        ALTER TABLE operations_improvements
-            DROP CONSTRAINT IF EXISTS chk_operations_improvement_type;
         ALTER TABLE operations_improvements
             ADD CONSTRAINT chk_operations_improvement_type
             CHECK (
@@ -134,17 +138,15 @@ def upgrade() -> None:
                     'vendor_experience_improvement',
                     'other'
                 )
-            );
+            )
         """
     )
 
 
 def downgrade() -> None:
     op.execute(
-        """
-        ALTER TABLE operations_approval_requests
-            DROP COLUMN IF EXISTS due_date;
-        ALTER TABLE operations_approval_requests
-            DROP COLUMN IF EXISTS approver_ids;
-        """
+        "ALTER TABLE operations_approval_requests DROP COLUMN IF EXISTS due_date"
+    )
+    op.execute(
+        "ALTER TABLE operations_approval_requests DROP COLUMN IF EXISTS approver_ids"
     )
