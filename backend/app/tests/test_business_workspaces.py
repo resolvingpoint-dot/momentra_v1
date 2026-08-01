@@ -74,6 +74,26 @@ async def test_select_and_resolve_workspace(mock_db):
 
 
 @pytest.mark.asyncio
+async def test_resolve_selected_unknown_workspace_falls_back(mock_db):
+    """Stale client workspace_id hint must not 403 session reads."""
+    svc = BusinessWorkspaceService(mock_db)
+    owned = await svc.create_workspace(MOCK_USER_ID, name="Pureborn")
+    ws_id = UUID(owned["id"])
+    ws = await svc.get_workspace(ws_id)
+    member = await svc.get_member(ws_id, MOCK_USER_ID)
+    assert ws is not None and member is not None
+
+    stale = uuid4()
+    resolved = await svc.resolve_selected(
+        MOCK_USER_ID,
+        workspace_id=stale,
+        memberships=[(ws, member)],
+    )
+    assert resolved is not None
+    assert str(resolved[0].workspace_id) == owned["id"]
+
+
+@pytest.mark.asyncio
 async def test_invite_and_accept(mock_db):
     svc = BusinessWorkspaceService(mock_db)
     created = await svc.create_workspace(MOCK_USER_ID, name="Pureborn")

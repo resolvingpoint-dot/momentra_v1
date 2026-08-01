@@ -186,14 +186,13 @@ class BusinessWorkspaceService:
         if not pairs:
             return None
 
+        # Explicit workspace_id is a client hint for session reads. If the user is
+        # not a member (stale disk/selection), fall through to preferred/first so
+        # bootstrap/chrome recover. Path APIs still use require_member (strict).
         if workspace_id is not None:
             for ws, member in pairs:
                 if ws.workspace_id == workspace_id:
                     return ws, member
-            raise WorkspacePermissionError(
-                "workspace_permission_denied",
-                "You are not a member of this company.",
-            )
 
         preferred = await self.get_selected_preference(user_id)
         if preferred is not None:
