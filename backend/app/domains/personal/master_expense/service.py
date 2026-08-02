@@ -1,9 +1,13 @@
 """Master Expense Orchestrator — fan-out to Life Ops, Lifestyle, Relationships."""
 from __future__ import annotations
 
+import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException, status
 from fastapi.encoders import jsonable_encoder
@@ -271,6 +275,8 @@ class MasterExpenseService:
             validated_expense=validated_expense,
         )
 
+        spans: dict[str, float] = {}
+        t0 = time.perf_counter()
         life_ops_event = await self._create_quick_add_event(
             user_id=user_id,
             moment=life_ops_moment,
@@ -280,6 +286,9 @@ class MasterExpenseService:
             occurred_at=occurred_at,
             dispatch_fn=dispatch_life_ops,
         )
+        spans["life_ops_write_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+
+        t1 = time.perf_counter()
         lifestyle_event = await self._create_quick_add_event(
             user_id=user_id,
             moment=lifestyle_moment,
@@ -289,6 +298,7 @@ class MasterExpenseService:
             occurred_at=occurred_at,
             dispatch_fn=dispatch_lifestyle,
         )
+        spans["lifestyle_write_ms"] = round((time.perf_counter() - t1) * 1000, 2)
 
         relationships_event: PersonalQuickAddEvents | None = None
         if shared_input.is_shared and relationships_moment is not None:
@@ -299,6 +309,7 @@ class MasterExpenseService:
                     validated_expense=validated_expense,
                     shared=shared_input,
                 )
+                t2 = time.perf_counter()
                 relationships_event = await self._create_quick_add_event(
                     user_id=user_id,
                     moment=relationships_moment,
@@ -308,6 +319,7 @@ class MasterExpenseService:
                     occurred_at=occurred_at,
                     dispatch_fn=dispatch_relationships,
                 )
+                spans["relationships_write_ms"] = round((time.perf_counter() - t2) * 1000, 2)
 
         master_row = PersonalMasterExpenses(
             master_expense_id=master_expense_id,
@@ -335,19 +347,69 @@ class MasterExpenseService:
             ),
         )
         self._repo.add(master_row)
+        t_commit = time.perf_counter()
         await self.session.commit()
         await self.session.refresh(master_row)
+        spans["transaction_commit_ms"] = round((time.perf_counter() - t_commit) * 1000, 2)
 
-        await self._publish_events(
-            user_id=user_id,
-            master_row=master_row,
-            life_ops_event=life_ops_event,
-            lifestyle_event=lifestyle_event,
-            relationships_event=relationships_event,
+        include_rel = relationships_event is not None
+        life_ops_eid = life_ops_event.quick_add_event_id
+        lifestyle_eid = lifestyle_event.quick_add_event_id
+        relationships_eid = (
+            relationships_event.quick_add_event_id if relationships_event else None
         )
-        await invalidate_for_master_expense(
+
+        from app.domains.shared.deferred_side_effects import schedule_deferred_side_effect
+
+        async def _post_commit() -> None:
+            from app.core.database import async_session_factory
+
+            if async_session_factory is None:
+                raise RuntimeError("async_session_factory unavailable for ME post-commit")
+            async with async_session_factory() as bg:
+                svc = MasterExpenseService(bg)
+                row = await bg.get(PersonalMasterExpenses, master_expense_id)
+                if row is None:
+                    raise RuntimeError("master expense row missing after commit")
+                lo = await bg.get(PersonalQuickAddEvents, life_ops_eid)
+                ls = await bg.get(PersonalQuickAddEvents, lifestyle_eid)
+                rs = (
+                    await bg.get(PersonalQuickAddEvents, relationships_eid)
+                    if relationships_eid
+                    else None
+                )
+                if lo and ls:
+                    await svc._publish_events(
+                        user_id=user_id,
+                        master_row=row,
+                        life_ops_event=lo,
+                        lifestyle_event=ls,
+                        relationships_event=rs,
+                    )
+                t_inv = time.perf_counter()
+                await invalidate_for_master_expense(
+                    user_id,
+                    include_relationships=include_rel,
+                )
+                logger.info(
+                    "master_expense.post_commit user=%s invalidate_ms=%.2f spans=%s",
+                    user_id,
+                    (time.perf_counter() - t_inv) * 1000,
+                    spans,
+                )
+                await bg.commit()
+
+        schedule_deferred_side_effect(
+            "master_expense_publish_invalidate",
+            _post_commit,
+            retries=1,
+            context={"master_expense_id": str(master_expense_id)},
+        )
+        logger.info(
+            "master_expense.response_sent user=%s master=%s spans=%s",
             user_id,
-            include_relationships=relationships_event is not None,
+            master_expense_id,
+            spans,
         )
 
         return await self._response_from_row(master_row, idempotent_replay=False)

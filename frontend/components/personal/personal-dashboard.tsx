@@ -268,51 +268,37 @@ export function PersonalDashboard() {
     let budgetsResult: PersonalBudget[] = [];
     let summaryResult: PersonalSummary | null = null;
     try {
-      const [s, g, m, c] = await Promise.all([
+      const [s, g, m, c, t, breakdownResult, categoriesResult, budgetsSettled] = await Promise.all([
         fetchPersonalSummary(token),
         fetchGoals(token),
         fetchMoments(token),
         fetchCycles(token),
+        fetchTransactions(token, {
+          limit: 200,
+          month: txMonth || undefined,
+          cycle_id: txCycleFilter || undefined,
+          category_id: txCategoryFilter || undefined,
+          merchant: txMerchantFilter || undefined,
+        }),
+        fetchSpendBreakdown(token, {
+          month: txMonth || undefined,
+          cycle_id: txCycleFilter || undefined,
+        }).catch(() => null),
+        fetchTransactionCategories(token).catch(() => [] as Awaited<ReturnType<typeof fetchTransactionCategories>>),
+        budgetCycleId
+          ? fetchBudgets(token, budgetCycleId).catch(() => [] as PersonalBudget[])
+          : Promise.resolve([] as PersonalBudget[]),
       ]);
       summaryResult = s;
       setSummary(s);
       setGoals(g);
       setMoments(m);
       setCycles(c);
-      const t = await fetchTransactions(token, {
-        limit: 200,
-        month: txMonth || undefined,
-        cycle_id: txCycleFilter || undefined,
-        category_id: txCategoryFilter || undefined,
-        merchant: txMerchantFilter || undefined,
-      });
       setTransactions(t);
-      try {
-        setBreakdown(
-          await fetchSpendBreakdown(token, {
-            month: txMonth || undefined,
-            cycle_id: txCycleFilter || undefined,
-          }),
-        );
-      } catch {
-        setBreakdown(null);
-      }
-      try {
-        setTxnCategories(await fetchTransactionCategories(token));
-      } catch {
-        setTxnCategories([]);
-      }
-      if (budgetCycleId) {
-        try {
-          budgetsResult = await fetchBudgets(token, budgetCycleId);
-          setBudgets(budgetsResult);
-        } catch {
-          budgetsResult = [];
-          setBudgets([]);
-        }
-      } else {
-        setBudgets([]);
-      }
+      setBreakdown(breakdownResult);
+      setTxnCategories(categoriesResult);
+      budgetsResult = budgetsSettled;
+      setBudgets(budgetsSettled);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load");
     }

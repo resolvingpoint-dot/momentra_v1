@@ -1,0 +1,16 @@
+{
+  "note": "Approved baselines require explicit PR review. Do not auto-replace on regression.",
+  "tolerance_pct_default": 25,
+  "flows": [
+    {
+      "flow": "app.bootstrap",
+      "p95": 250,
+      "request_count_p95": 1
+    },
+    {
+      "flow": "quick_add.personal.expense",
+      "p95": 1000,
+      "request_count_p95": 3
+    }
+  ]
+}

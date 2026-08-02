@@ -20,6 +20,7 @@ import {
   PersonalRepository,
   invalidateAfterMasterExpense,
 } from "@/repositories/PersonalRepository";
+import { useMasterExpenseOptions, invalidateMasterExpenseOptionsCache } from "@/hooks/useMasterExpenseOptions";
 import type { PersonalMasterExpenseOptionsResponse, PersonalQuickAddFieldOption } from "@/lib/api/client";
 import { buildMasterExpensePayload } from "@/lib/master_expense/payloadBuilder";
 import {
@@ -260,28 +261,36 @@ export function MasterExpenseOrchestrator({ onBack, onSuccess }: MasterExpenseOr
 
   const descriptionPlaceholder = MASTER_EXPENSE_DESCRIPTION_PLACEHOLDERS[0];
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await PersonalRepository.getMasterExpenseOptions();
-      setOptions(data);
-      if (data.accounts[0]) setAccountId(data.accounts[0].account_id);
-      // Do not auto-select category.
-      const accountCurrency = data.accounts[0]?.currency_code;
-      if (accountCurrency) {
-        setMoney((prev) => ({ ...prev, currency_code: accountCurrency }));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load options.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    options: cachedOptions,
+    loading: optionsLoading,
+    error: optionsError,
+    reload: reloadOptions,
+  } = useMasterExpenseOptions({ enabled: true });
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!cachedOptions) return;
+    setOptions(cachedOptions);
+    setLoading(false);
+    setError(null);
+    if (cachedOptions.accounts[0] && !accountId) {
+      setAccountId(cachedOptions.accounts[0].account_id);
+    }
+    const accountCurrency = cachedOptions.accounts[0]?.currency_code;
+    if (accountCurrency) {
+      setMoney((prev) => ({ ...prev, currency_code: accountCurrency }));
+    }
+  }, [cachedOptions, accountId]);
+
+  useEffect(() => {
+    setLoading(optionsLoading && !cachedOptions);
+    if (optionsError) setError(optionsError);
+  }, [optionsLoading, optionsError, cachedOptions]);
+
+  const load = useCallback(async () => {
+    invalidateMasterExpenseOptionsCache();
+    await reloadOptions(true);
+  }, [reloadOptions]);
 
   const resolvedOptions = useMemo(() => {
     if (!options) return null;

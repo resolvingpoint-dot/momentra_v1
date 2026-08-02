@@ -133,26 +133,74 @@ def enqueue_business_user_agg_refresh(
     )
 
 
+# Mutation → projection slices (avoid invalidate-everything).
+# notes-only / lightweight edits: activity only via quick_add warm; pulse when money/ops KPIs change.
+_ACTION_SLICE_MATRIX: dict[str, tuple[str, ...]] = {
+    "SPEND_ENTRY": ("pulse", "moments", "quick_add"),
+    "VENDOR_UPDATE": ("pulse", "moments", "quick_add"),
+    "APPROVAL_REQUEST": ("pulse", "moments", "quick_add"),
+    "ISSUE_RISK": ("pulse", "moments", "quick_add"),
+    "OPERATIONAL_IMPROVEMENT": ("pulse", "moments", "quick_add"),
+    "TEAM_UPDATE": ("pulse", "moments", "quick_add"),
+    "RECOGNITION": ("pulse", "moments", "quick_add"),
+    "GENERAL_UPDATE": ("moments", "quick_add"),
+    "NOTE": ("moments", "quick_add"),
+}
+
+
 async def invalidate_business_projections(
     user_id: UUID,
     moment_id: UUID,
     *,
     moment_type: str = "TEAM_OPERATIONS",
     reason: str = "business_activity",
+    slices: tuple[str, ...] | None = None,
 ) -> None:
     template = template_key(moment_type, moment_id)
-    for slice_type in MOMENT_SLICES:
-        await projection_cache.mark_stale(user_id, template, slice_type)
-    for slice_type in USER_AGG_SLICES:
-        await projection_cache.mark_stale(user_id, USER_AGG_TEMPLATE, slice_type)
+    moment_slices = slices or MOMENT_SLICES
+    for slice_type in moment_slices:
+        if slice_type in MOMENT_SLICES:
+            await projection_cache.mark_stale(user_id, template, slice_type)
+    # User-agg only when pulse is affected (money / recognition surfaces).
+    touch_user_agg = slices is None or "pulse" in moment_slices
+    if touch_user_agg:
+        for slice_type in USER_AGG_SLICES:
+            await projection_cache.mark_stale(user_id, USER_AGG_TEMPLATE, slice_type)
+    # Celery accepts all | moments | user_agg
+    enqueue_mode = "all" if (slices is None or touch_user_agg) else "moments"
     enqueue_business_projection_refresh(
-        user_id, moment_id, moment_type=moment_type, reason=reason, slices="all"
+        user_id,
+        moment_id,
+        moment_type=moment_type,
+        reason=reason,
+        slices=enqueue_mode,
     )
     logger.debug(
-        "BusinessLoad invalidate user=%s template=%s reason=%s",
+        "BusinessLoad invalidate user=%s template=%s reason=%s slices=%s enqueue=%s",
         user_id,
         template,
         reason,
+        moment_slices,
+        enqueue_mode,
+    )
+
+
+async def invalidate_business_projections_for_action(
+    user_id: UUID,
+    moment_id: UUID,
+    *,
+    action_type: str,
+    moment_type: str = "TEAM_OPERATIONS",
+    reason: str = "business_activity",
+) -> None:
+    key = (action_type or "").upper()
+    slices = _ACTION_SLICE_MATRIX.get(key, MOMENT_SLICES)
+    await invalidate_business_projections(
+        user_id,
+        moment_id,
+        moment_type=moment_type,
+        reason=reason,
+        slices=slices,
     )
 
 

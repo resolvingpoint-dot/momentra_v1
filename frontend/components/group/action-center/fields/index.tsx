@@ -422,6 +422,18 @@ export function PhotoPlaceholder(props: { label?: string }) {
 
 export type MemberPickerSurface = "trip" | "living" | "purchase";
 
+export type ExpenseContextMember = { value: string; label: string };
+
+type ExpenseContextPayload = {
+  default_currency_code?: string;
+  allow_multi_currency?: boolean;
+  default_paid_by_participant_id?: string | null;
+  payers?: Array<{ id: string; display_name: string }>;
+  guests?: Array<{ id: string; full_name: string }>;
+  members?: Array<{ id: string; display_name: string }>;
+  participants?: Array<{ id?: string; user_id?: string; display_name: string }>;
+};
+
 function memberContextPath(momentId: string, surface: MemberPickerSurface = "trip"): string {
   if (surface === "living") {
     return `api/v1/group/shared-living/moments/${momentId}/quick-add/expenses/context`;
@@ -430,6 +442,47 @@ function memberContextPath(momentId: string, surface: MemberPickerSurface = "tri
     return `api/v1/group/shared-purchase/moments/${momentId}/quick-add/expenses/context`;
   }
   return `api/v1/group/trips/${momentId}/quick-add/expense/context`;
+}
+
+const expenseContextInflight = new Map<string, Promise<ExpenseContextPayload>>();
+const expenseContextMem = new Map<string, { at: number; data: ExpenseContextPayload }>();
+const EXPENSE_CONTEXT_TTL_MS = 60_000;
+
+function membersFromContext(ctx: ExpenseContextPayload): ExpenseContextMember[] {
+  const rows = [
+    ...(ctx.payers ?? []).map((p) => ({ value: p.id, label: p.display_name })),
+    ...(ctx.members ?? []).map((m) => ({ value: m.id, label: m.display_name })),
+    ...(ctx.guests ?? []).map((g) => ({ value: g.id, label: g.full_name })),
+    ...(ctx.participants ?? []).map((p) => ({
+      value: String(p.id || p.user_id || ""),
+      label: p.display_name,
+    })),
+  ].filter((r) => r.value);
+  return Array.from(new Map(rows.map((r) => [r.value, r])).values());
+}
+
+/** Single-flight expense context — at most one network request per moment/surface. */
+export async function fetchExpenseContextOnce(
+  momentId: string,
+  surface: MemberPickerSurface = "trip",
+): Promise<ExpenseContextPayload> {
+  const key = `${surface}:${momentId}`;
+  const mem = expenseContextMem.get(key);
+  if (mem && Date.now() - mem.at < EXPENSE_CONTEXT_TTL_MS) return mem.data;
+  const inflight = expenseContextInflight.get(key);
+  if (inflight) return inflight;
+  const req = requestWithRetry<ExpenseContextPayload>(memberContextPath(momentId, surface), {
+    method: "GET",
+  })
+    .then((data) => {
+      expenseContextMem.set(key, { at: Date.now(), data });
+      return data;
+    })
+    .finally(() => {
+      expenseContextInflight.delete(key);
+    });
+  expenseContextInflight.set(key, req);
+  return req;
 }
 
 export function ParticipantPicker(props: {
@@ -461,24 +514,9 @@ export function ParticipantPicker(props: {
     setLoading(true);
     void (async () => {
       try {
-        const ctx = await requestWithRetry<{
-          payers?: Array<{ id: string; display_name: string }>;
-          guests?: Array<{ id: string; full_name: string }>;
-          members?: Array<{ id: string; display_name: string }>;
-          participants?: Array<{ id?: string; user_id?: string; display_name: string }>;
-          default_paid_by_participant_id?: string | null;
-        }>(memberContextPath(props.momentId!, surface), { method: "GET" });
+        const ctx = await fetchExpenseContextOnce(props.momentId!, surface);
         if (cancelled) return;
-        const rows = [
-          ...(ctx.payers ?? []).map((p) => ({ value: p.id, label: p.display_name })),
-          ...(ctx.members ?? []).map((m) => ({ value: m.id, label: m.display_name })),
-          ...(ctx.guests ?? []).map((g) => ({ value: g.id, label: g.full_name })),
-          ...(ctx.participants ?? []).map((p) => ({
-            value: String(p.id || p.user_id || ""),
-            label: p.display_name,
-          })),
-        ].filter((r) => r.value);
-        const dedup = Array.from(new Map(rows.map((r) => [r.value, r])).values());
+        const dedup = membersFromContext(ctx);
         setLoaded(dedup);
         if (!props.value && ctx.default_paid_by_participant_id) {
           props.onChange(String(ctx.default_paid_by_participant_id));
@@ -590,21 +628,9 @@ export function MemberMultiSelect(props: {
     setLoading(true);
     void (async () => {
       try {
-        const ctx = await requestWithRetry<{
-          members?: Array<{ id: string; display_name: string }>;
-          payers?: Array<{ id: string; display_name: string }>;
-          participants?: Array<{ id?: string; user_id?: string; display_name: string }>;
-        }>(memberContextPath(props.momentId!, surface), { method: "GET" });
+        const ctx = await fetchExpenseContextOnce(props.momentId!, surface);
         if (cancelled) return;
-        const rows = [
-          ...(ctx.members ?? []).map((m) => ({ value: m.id, label: m.display_name })),
-          ...(ctx.payers ?? []).map((p) => ({ value: p.id, label: p.display_name })),
-          ...(ctx.participants ?? []).map((p) => ({
-            value: String(p.id || p.user_id || ""),
-            label: p.display_name,
-          })),
-        ].filter((r) => r.value);
-        const dedup = Array.from(new Map(rows.map((r) => [r.value, r])).values());
+        const dedup = membersFromContext(ctx);
         setLoaded(dedup);
         if (!props.value.length && dedup.length) {
           props.onChange(dedup.map((d) => d.value));

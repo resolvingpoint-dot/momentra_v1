@@ -23,6 +23,7 @@ import {
   TextField,
   TimeField,
   Toggle,
+  fetchExpenseContextOnce,
   VisibilitySelector,
 } from "@/components/group/action-center/fields";
 import { MemoryMediaUploader, memoryPathsFromState } from "@/components/group/action-center/fields/MemoryMediaUploader";
@@ -78,20 +79,21 @@ export function ExperienceExpenseForm(props: FormProps) {
     expense_time: nowISOTime(),
   });
   const [ready, setReady] = useState(false);
+  const [memberOptions, setMemberOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const ctx = await requestWithRetry<{
-          default_currency_code?: string;
-          allow_multi_currency?: boolean;
-          default_paid_by_participant_id?: string | null;
-          members?: Array<{ id: string; display_name: string }>;
-          payers?: Array<{ id: string; display_name: string }>;
-        }>(`api/v1/group/trips/${props.momentId}/quick-add/expense/context`, { method: "GET" });
+        const ctx = await fetchExpenseContextOnce(props.momentId, "trip");
         if (cancelled) return;
-        const memberIds = (ctx.members?.length ? ctx.members : ctx.payers ?? []).map((m) => m.id);
+        const opts = [
+          ...(ctx.members ?? []).map((m) => ({ value: m.id, label: m.display_name })),
+          ...(ctx.payers ?? []).map((p) => ({ value: p.id, label: p.display_name })),
+        ];
+        const dedup = Array.from(new Map(opts.map((r) => [r.value, r])).values());
+        setMemberOptions(dedup);
+        const memberIds = dedup.map((m) => m.value);
         setInitialState({
           currency: ctx.default_currency_code || "INR",
           allow_multi_currency: ctx.allow_multi_currency !== false,
@@ -180,6 +182,7 @@ export function ExperienceExpenseForm(props: FormProps) {
                 onChange={(v) => set("paid_by", v)}
                 required
                 error={errors.paid_by}
+                options={memberOptions}
                 momentId={props.momentId}
                 readOnlyWhenSingle
                 onInviteParticipant={
@@ -192,6 +195,7 @@ export function ExperienceExpenseForm(props: FormProps) {
                 label="Participants"
                 value={ids}
                 onChange={(next) => set("participants", next)}
+                options={memberOptions}
                 momentId={props.momentId}
                 required
                 error={errors.participants}

@@ -1,12 +1,16 @@
 """Operations template builder — one-pass OpsContext from SQL."""
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import async_session_factory
 
 from app.domains.business.models import (
     BusinessActivityEvents,
@@ -40,6 +44,280 @@ def _minor_from_decimal(value, *, currency: str = "INR") -> int:
 
 def _stage(timings: dict[str, float], name: str, start: float) -> None:
     timings[name] = round((time.perf_counter() - start) * 1000, 2)
+
+
+async def _with_session(coro_factory):
+    if async_session_factory is None:
+        raise RuntimeError("DATABASE_URL not configured")
+    async with async_session_factory() as session:
+        return await coro_factory(session)
+
+
+async def _load_members(session: AsyncSession, moment_id: UUID) -> dict[str, Any]:
+    members = await session.execute(
+        select(BusinessMomentMembers).where(
+            BusinessMomentMembers.moment_id == moment_id,
+            BusinessMomentMembers.member_status.in_(["active", "configured"]),
+        )
+    )
+    member_rows = list(members.scalars().all())
+    picker = [
+        {
+            "member_id": str(m.member_id),
+            "name": m.name,
+            "role": m.role,
+            "user_id": str(m.user_id) if m.user_id else None,
+        }
+        for m in member_rows
+    ]
+    owner = next(
+        (
+            m
+            for m in member_rows
+            if "owner" in (m.role or "").lower() or (m.role or "").upper() == "OWNER"
+        ),
+        None,
+    )
+    owner_name = (owner.name if owner else None) or (
+        str(owner.user_id) if owner and owner.user_id else None
+    )
+    return {
+        "rows": member_rows,
+        "count": len(member_rows),
+        "picker": picker,
+        "owner_name": owner_name,
+    }
+
+
+async def _load_vendor_kpis(session: AsyncSession, moment_id: UUID) -> tuple[int, int]:
+    total = await session.execute(
+        select(func.count())
+        .select_from(OperationsVendorUpdates)
+        .where(
+            OperationsVendorUpdates.moment_id == moment_id,
+            OperationsVendorUpdates.is_voided.is_(False),
+        )
+    )
+    critical = await session.execute(
+        select(func.count())
+        .select_from(OperationsVendorUpdates)
+        .where(
+            OperationsVendorUpdates.moment_id == moment_id,
+            OperationsVendorUpdates.is_voided.is_(False),
+            func.lower(OperationsVendorUpdates.impact_level).in_(["critical", "high"]),
+        )
+    )
+    return int(total.scalar_one() or 0), int(critical.scalar_one() or 0)
+
+
+async def _load_approval_kpis(
+    session: AsyncSession, moment_id: UUID, today: date, recent_cut: datetime
+) -> dict[str, Any]:
+    pending = await session.execute(
+        select(func.count())
+        .select_from(OperationsApprovalRequests)
+        .where(
+            OperationsApprovalRequests.moment_id == moment_id,
+            OperationsApprovalRequests.is_voided.is_(False),
+            OperationsApprovalRequests.approval_status == "pending",
+        )
+    )
+    overdue = await session.execute(
+        select(func.count())
+        .select_from(OperationsApprovalRequests)
+        .where(
+            OperationsApprovalRequests.moment_id == moment_id,
+            OperationsApprovalRequests.is_voided.is_(False),
+            OperationsApprovalRequests.approval_status == "pending",
+            OperationsApprovalRequests.due_date.is_not(None),
+            OperationsApprovalRequests.due_date < today,
+        )
+    )
+    amount = await session.execute(
+        select(func.coalesce(func.sum(OperationsApprovalRequests.amount_minor), 0)).where(
+            OperationsApprovalRequests.moment_id == moment_id,
+            OperationsApprovalRequests.is_voided.is_(False),
+            OperationsApprovalRequests.approval_status == "pending",
+        )
+    )
+    # Recent approved/rejected still need updated_at filter — light row fetch capped
+    recent_rows = await session.execute(
+        select(
+            OperationsApprovalRequests.approval_status,
+            OperationsApprovalRequests.updated_at,
+        ).where(
+            OperationsApprovalRequests.moment_id == moment_id,
+            OperationsApprovalRequests.is_voided.is_(False),
+            OperationsApprovalRequests.approval_status.in_(["approved", "rejected"]),
+            OperationsApprovalRequests.updated_at >= recent_cut.replace(tzinfo=None),
+        )
+    )
+    approved_recently = 0
+    rejected_recently = 0
+    for status_val, updated_at in recent_rows.all():
+        if not updated_at:
+            continue
+        ts = (
+            updated_at.replace(tzinfo=timezone.utc)
+            if updated_at.tzinfo is None
+            else updated_at
+        )
+        if ts < recent_cut:
+            continue
+        if status_val == "approved":
+            approved_recently += 1
+        elif status_val == "rejected":
+            rejected_recently += 1
+    amt = int(amount.scalar_one() or 0)
+    return {
+        "pending": int(pending.scalar_one() or 0),
+        "overdue": int(overdue.scalar_one() or 0),
+        "approved_recently": approved_recently,
+        "rejected_recently": rejected_recently,
+        "amount_awaiting": amt if amt else None,
+    }
+
+
+async def _load_issue_kpis(
+    session: AsyncSession, moment_id: UUID, today: date, recent_cut: datetime
+) -> dict[str, Any]:
+    open_statuses = ("open", "investigating")
+    open_c = await session.execute(
+        select(func.count())
+        .select_from(OperationsIssues)
+        .where(
+            OperationsIssues.moment_id == moment_id,
+            OperationsIssues.is_voided.is_(False),
+            OperationsIssues.issue_status.in_(open_statuses),
+        )
+    )
+    critical = await session.execute(
+        select(func.count())
+        .select_from(OperationsIssues)
+        .where(
+            OperationsIssues.moment_id == moment_id,
+            OperationsIssues.is_voided.is_(False),
+            OperationsIssues.issue_status.in_(open_statuses),
+            func.lower(OperationsIssues.severity) == "critical",
+        )
+    )
+    overdue = await session.execute(
+        select(func.count())
+        .select_from(OperationsIssues)
+        .where(
+            OperationsIssues.moment_id == moment_id,
+            OperationsIssues.is_voided.is_(False),
+            OperationsIssues.issue_status.in_(open_statuses),
+            OperationsIssues.target_resolution_date.is_not(None),
+            OperationsIssues.target_resolution_date < today,
+        )
+    )
+    unassigned = await session.execute(
+        select(func.count())
+        .select_from(OperationsIssues)
+        .where(
+            OperationsIssues.moment_id == moment_id,
+            OperationsIssues.is_voided.is_(False),
+            OperationsIssues.issue_status.in_(open_statuses),
+            OperationsIssues.owner_id.is_(None),
+        )
+    )
+    resolved = await session.execute(
+        select(func.count())
+        .select_from(OperationsIssues)
+        .where(
+            OperationsIssues.moment_id == moment_id,
+            OperationsIssues.is_voided.is_(False),
+            OperationsIssues.issue_status == "resolved",
+            OperationsIssues.resolved_at.is_not(None),
+            OperationsIssues.resolved_at >= recent_cut.replace(tzinfo=None),
+        )
+    )
+    return {
+        "open": int(open_c.scalar_one() or 0),
+        "critical": int(critical.scalar_one() or 0),
+        "overdue": int(overdue.scalar_one() or 0),
+        "unassigned": int(unassigned.scalar_one() or 0),
+        "resolved_recently": int(resolved.scalar_one() or 0),
+    }
+
+
+async def _load_improvement_kpis(session: AsyncSession, moment_id: UUID) -> dict[str, int]:
+    planned = await session.execute(
+        select(func.count())
+        .select_from(OperationsImprovements)
+        .where(
+            OperationsImprovements.moment_id == moment_id,
+            OperationsImprovements.is_voided.is_(False),
+            OperationsImprovements.improvement_status.in_(["recorded", "planned"]),
+        )
+    )
+    in_progress = await session.execute(
+        select(func.count())
+        .select_from(OperationsImprovements)
+        .where(
+            OperationsImprovements.moment_id == moment_id,
+            OperationsImprovements.is_voided.is_(False),
+            OperationsImprovements.improvement_status.in_(["in_follow_up", "in_progress"]),
+        )
+    )
+    completed = await session.execute(
+        select(func.count())
+        .select_from(OperationsImprovements)
+        .where(
+            OperationsImprovements.moment_id == moment_id,
+            OperationsImprovements.is_voided.is_(False),
+            OperationsImprovements.improvement_status.in_(["completed", "done"]),
+        )
+    )
+    return {
+        "planned": int(planned.scalar_one() or 0),
+        "in_progress": int(in_progress.scalar_one() or 0),
+        "completed": int(completed.scalar_one() or 0),
+    }
+
+
+async def _load_activity(session: AsyncSession, moment_id: UUID) -> dict[str, Any]:
+    events = await session.execute(
+        select(BusinessActivityEvents)
+        .where(
+            BusinessActivityEvents.business_moment_id == moment_id,
+            BusinessActivityEvents.is_voided.is_(False),
+        )
+        .order_by(BusinessActivityEvents.occurred_at.desc())
+        .limit(50)
+    )
+    activity_rows = list(events.scalars().all())
+    activities = [
+        {
+            "event_id": str(e.event_id),
+            "action_type": e.action_type,
+            "title": e.title,
+            "subtitle": e.subtitle,
+            "occurred_at": str(e.occurred_at),
+            "is_voided": e.is_voided,
+            "source_moment_id": str(moment_id),
+            "payload": e.payload or {},
+        }
+        for e in activity_rows
+    ]
+    return {
+        "activities": activities,
+        "last_updated": str(activity_rows[0].occurred_at) if activity_rows else None,
+    }
+
+
+async def _load_ops_sections_concurrent(
+    moment_id: UUID, today: date, recent_cut: datetime
+) -> tuple:
+    return await asyncio.gather(
+        _with_session(lambda s: _load_members(s, moment_id)),
+        _with_session(lambda s: _load_vendor_kpis(s, moment_id)),
+        _with_session(lambda s: _load_approval_kpis(s, moment_id, today, recent_cut)),
+        _with_session(lambda s: _load_issue_kpis(s, moment_id, today, recent_cut)),
+        _with_session(lambda s: _load_improvement_kpis(s, moment_id)),
+        _with_session(lambda s: _load_activity(s, moment_id)),
+    )
 
 
 class OpsTemplateBuilder:
@@ -147,177 +425,48 @@ class OpsTemplateBuilder:
         _stage(timings, "budget", t)
 
         t = time.perf_counter()
-        members = await self.session.execute(
-            select(BusinessMomentMembers).where(
-                BusinessMomentMembers.moment_id == moment_id,
-                BusinessMomentMembers.member_status.in_(["active", "configured"]),
-            )
-        )
-        member_rows = list(members.scalars().all())
-        member_count = len(member_rows)
-        member_picker = [
-            {
-                "member_id": str(m.member_id),
-                "name": m.name,
-                "role": m.role,
-                "user_id": str(m.user_id) if m.user_id else None,
-            }
-            for m in member_rows
-        ]
-        owner = next(
-            (
-                m
-                for m in member_rows
-                if "owner" in (m.role or "").lower() or (m.role or "").upper() == "OWNER"
-            ),
-            None,
-        )
-        owner_name = (owner.name if owner else None) or (str(owner.user_id) if owner and owner.user_id else None)
-        _stage(timings, "members", t)
-
-        t = time.perf_counter()
-        # spend already loaded
+        # spend already loaded above
         _stage(timings, "spend", t)
 
-        t = time.perf_counter()
-        vendor_q = await self.session.execute(
-            select(OperationsVendorUpdates).where(
-                OperationsVendorUpdates.moment_id == moment_id,
-                OperationsVendorUpdates.is_voided.is_(False),
-            )
-        )
-        vendor_rows = list(vendor_q.scalars().all())
-        vendor_count = len(vendor_rows)
-        critical_vendor_count = sum(
-            1
-            for v in vendor_rows
-            if (getattr(v, "impact_level", None) or getattr(v, "priority", None) or "").lower()
-            in {"critical", "high"}
-        )
-        _stage(timings, "vendors", t)
-
-        t = time.perf_counter()
         today = date.today()
         recent_cut = datetime.now(timezone.utc) - timedelta(days=14)
-        approval_q = await self.session.execute(
-            select(OperationsApprovalRequests).where(
-                OperationsApprovalRequests.moment_id == moment_id,
-                OperationsApprovalRequests.is_voided.is_(False),
-            )
-        )
-        approval_rows = list(approval_q.scalars().all())
-        pending_approvals = sum(1 for a in approval_rows if (a.approval_status or "") == "pending")
-        overdue_approval_count = sum(
-            1
-            for a in approval_rows
-            if (a.approval_status or "") == "pending"
-            and getattr(a, "due_date", None) is not None
-            and a.due_date < today
-        )
-        approved_recently = sum(
-            1
-            for a in approval_rows
-            if (a.approval_status or "") == "approved"
-            and a.updated_at
-            and (
-                a.updated_at.replace(tzinfo=timezone.utc)
-                if a.updated_at.tzinfo is None
-                else a.updated_at
-            )
-            >= recent_cut
-        )
-        rejected_recently = sum(
-            1
-            for a in approval_rows
-            if (a.approval_status or "") == "rejected"
-            and a.updated_at
-            and (
-                a.updated_at.replace(tzinfo=timezone.utc)
-                if a.updated_at.tzinfo is None
-                else a.updated_at
-            )
-            >= recent_cut
-        )
-        awaiting_amounts = [
-            int(a.amount_minor)
-            for a in approval_rows
-            if (a.approval_status or "") == "pending" and a.amount_minor is not None
-        ]
-        amount_awaiting = sum(awaiting_amounts) if awaiting_amounts else None
-        _stage(timings, "approvals", t)
 
+        # Independent KPI/list loads — separate sessions so gather is safe.
         t = time.perf_counter()
-        issue_q = await self.session.execute(
-            select(OperationsIssues).where(
-                OperationsIssues.moment_id == moment_id,
-                OperationsIssues.is_voided.is_(False),
-            )
-        )
-        issue_rows = list(issue_q.scalars().all())
-        open_statuses = {"open", "investigating"}
-        open_issues = [i for i in issue_rows if (i.issue_status or "") in open_statuses]
-        open_issue_count = len(open_issues)
-        critical_issue_count = sum(1 for i in open_issues if (i.severity or "").lower() == "critical")
-        overdue_issue_count = sum(
-            1
-            for i in open_issues
-            if i.target_resolution_date is not None and i.target_resolution_date < today
-        )
-        unassigned_issue_count = sum(1 for i in open_issues if i.owner_id is None)
-        resolved_recently = sum(
-            1
-            for i in issue_rows
-            if (i.issue_status or "") == "resolved"
-            and i.resolved_at
-            and i.resolved_at.replace(tzinfo=timezone.utc) >= recent_cut
-        )
-        _stage(timings, "issues", t)
-
-        t = time.perf_counter()
-        improvement_q = await self.session.execute(
-            select(OperationsImprovements).where(
-                OperationsImprovements.moment_id == moment_id,
-                OperationsImprovements.is_voided.is_(False),
-            )
-        )
-        improvement_rows = list(improvement_q.scalars().all())
-        planned = sum(
-            1 for i in improvement_rows if (i.improvement_status or "") in {"recorded", "planned"}
-        )
-        in_progress = sum(
-            1 for i in improvement_rows if (i.improvement_status or "") in {"in_follow_up", "in_progress"}
-        )
-        completed = sum(
-            1 for i in improvement_rows if (i.improvement_status or "") in {"completed", "done"}
-        )
+        (
+            member_bundle,
+            vendor_kpis,
+            approval_kpis,
+            issue_kpis,
+            improvement_kpis,
+            activity_bundle,
+        ) = await _load_ops_sections_concurrent(moment_id, today, recent_cut)
+        member_rows = member_bundle["rows"]
+        member_count = member_bundle["count"]
+        member_picker = member_bundle["picker"]
+        owner_name = member_bundle["owner_name"]
+        vendor_count, critical_vendor_count = vendor_kpis
+        pending_approvals = approval_kpis["pending"]
+        overdue_approval_count = approval_kpis["overdue"]
+        approved_recently = approval_kpis["approved_recently"]
+        rejected_recently = approval_kpis["rejected_recently"]
+        amount_awaiting = approval_kpis["amount_awaiting"]
+        open_issue_count = issue_kpis["open"]
+        critical_issue_count = issue_kpis["critical"]
+        overdue_issue_count = issue_kpis["overdue"]
+        unassigned_issue_count = issue_kpis["unassigned"]
+        resolved_recently = issue_kpis["resolved_recently"]
+        planned = improvement_kpis["planned"]
+        in_progress = improvement_kpis["in_progress"]
+        completed = improvement_kpis["completed"]
         improvement_count = planned + in_progress
+        activities = activity_bundle["activities"]
+        last_updated = activity_bundle["last_updated"]
+        _stage(timings, "members", t)
+        _stage(timings, "vendors", t)
+        _stage(timings, "approvals", t)
+        _stage(timings, "issues", t)
         _stage(timings, "improvements", t)
-
-        t = time.perf_counter()
-        events = await self.session.execute(
-            select(BusinessActivityEvents)
-            .where(
-                BusinessActivityEvents.business_moment_id == moment_id,
-                BusinessActivityEvents.is_voided.is_(False),
-            )
-            .order_by(BusinessActivityEvents.occurred_at.desc())
-            .limit(50)
-        )
-        activity_rows = list(events.scalars().all())
-        activities = [
-            {
-                "event_id": str(e.event_id),
-                "action_type": e.action_type,
-                "title": e.title,
-                "subtitle": e.subtitle,
-                "occurred_at": str(e.occurred_at),
-                "is_voided": e.is_voided,
-                "source_moment_id": str(moment_id),
-                "payload": e.payload or {},
-            }
-            for e in activity_rows
-        ]
-        last_updated = str(activity_rows[0].occurred_at) if activity_rows else None
         _stage(timings, "activity", t)
 
         t = time.perf_counter()
