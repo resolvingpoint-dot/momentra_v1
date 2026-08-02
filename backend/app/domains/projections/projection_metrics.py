@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 _counters: dict[str, int] = {
     "projection_cache_hit": 0,
     "projection_cache_miss": 0,
+    "deferred_side_effect_ok": 0,
+    "deferred_side_effect_fail": 0,
+    "deferred_side_effect_retry": 0,
 }
 _last_builder_stage: dict[str, Any] = {}
 
@@ -65,6 +68,19 @@ def record_cache_hit() -> None:
 
 def record_cache_miss() -> None:
     _counters["projection_cache_miss"] += 1
+
+
+def record_deferred_success(name: str = "") -> None:
+    _counters["deferred_side_effect_ok"] += 1
+    logger.info('{"event":"deferred_side_effect_ok","name":"%s"}', name)
+
+
+def record_deferred_failure(name: str = "") -> None:
+    _counters["deferred_side_effect_fail"] += 1
+
+
+def record_deferred_retry(name: str = "") -> None:
+    _counters["deferred_side_effect_retry"] += 1
 
 
 def get_counters() -> dict[str, int]:

@@ -11,6 +11,9 @@ from app.domains.business.activity.types import ActionType
 
 _FIELD = dict[str, Any]
 
+# Bump when catalog field shapes change so clients invalidate schema caches.
+ACTION_CATALOG_SCHEMA_VERSION = 2
+
 
 def _text(key: str, label: str, *, required: bool = True, multiline: bool = False) -> _FIELD:
     return {
@@ -888,6 +891,7 @@ def build_action_catalog_payload(
             "moment_id": moment_id,
             "moment_type": moment_type.upper() if moment_type else moment_type,
             "template_id": _template_id(moment_type),
+            "schema_version": ACTION_CATALOG_SCHEMA_VERSION,
             "coming_soon": True,
             "coming_soon_label": stub.get("label"),
             "coming_soon_subtitle": stub.get("subtitle"),
@@ -927,12 +931,15 @@ def build_action_catalog_payload(
                 "display_order": a["display_order"],
                 "supports": a.get("supports") or {},
                 "notify_defaults": a.get("notify_defaults") or {},
+                "fields": a.get("fields") or [],
+                "required_fields": a.get("required_fields") or [],
             }
         )
     return {
         "moment_id": moment_id,
         "moment_type": moment_type.upper() if moment_type else moment_type,
         "template_id": _template_id(moment_type),
+        "schema_version": ACTION_CATALOG_SCHEMA_VERSION,
         "coming_soon": False,
         "categories": list(categories.values()),
         "actions": [

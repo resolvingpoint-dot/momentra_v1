@@ -14,6 +14,24 @@ export type BusinessActionCapabilities = {
   offline?: boolean;
 };
 
+export type BusinessRendererField = {
+  key: string;
+  label: string;
+  field_type: string;
+  required?: boolean;
+  options?: Array<{ value: string; label: string }>;
+  placeholder?: string;
+  default_value?: string | boolean;
+  default?: string | boolean;
+  step_id?: string;
+  step_title?: string;
+  visible_when?: { field: string; equals: string };
+  label_when?: Array<{ field: string; equals: string; label: string }>;
+  multiple?: boolean;
+  searchable?: boolean;
+  allow_custom?: boolean;
+};
+
 export type BusinessCatalogAction = {
   action_id: string;
   action_type: string;
@@ -28,6 +46,9 @@ export type BusinessCatalogAction = {
   tags?: string[];
   synonyms?: string[];
   priority?: number;
+  /** Embedded renderer schema — prefer over GET .../renderer */
+  fields?: BusinessRendererField[];
+  required_fields?: string[];
 };
 
 export type BusinessCatalogCategory = {
@@ -50,29 +71,22 @@ export type BusinessActionCatalogResponse = {
   moment_id: string;
   moment_type: string;
   template_id: string;
+  /** Bump invalidates client schema caches */
+  schema_version?: number;
   categories: BusinessCatalogCategory[];
   actions: BusinessCatalogAction[];
   members: BusinessCatalogMember[];
 };
 
-export type BusinessRendererField = {
-  key: string;
-  label: string;
-  field_type: string;
-  required?: boolean;
-  options?: Array<{ value: string; label: string }>;
-  placeholder?: string;
-  default_value?: string;
-  step_id?: string;
-  step_title?: string;
-  visible_when?: { field: string; equals: string };
-};
-
 export type BusinessRendererMeta = {
   renderer_id: string;
-  title: string;
+  title?: string;
+  label?: string;
   fields: BusinessRendererField[];
+  required_fields?: string[];
   review_enabled?: boolean;
+  cta_label?: string;
+  supports?: BusinessActionCapabilities;
   steps?: Array<{ id: string; title: string; field_keys: string[] }>;
 };
 

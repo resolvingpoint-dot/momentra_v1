@@ -1,0 +1,53 @@
+name: Loading performance
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "web/lib/telemetry/**"
+      - "docs/platform/MOMENTRA_LOADING*"
+      - "docs/platform/MOMENTRA_MUTATION*"
+      - "docs/platform/MOMENTRA_PERFORMANCE*"
+      - ".github/workflows/loading-performance.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "backend/**"
+      - "web/lib/telemetry/**"
+      - ".github/workflows/loading-performance.yml"
+
+jobs:
+  correlation-and-journeys:
+    name: correlation-and-journeys
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Correlation + journey smoke
+        run: |
+          pytest -q \
+            app/tests/platform/test_platform_foundation.py \
+            app/tests/acceptance/performance/test_journeys.py \
+            -k "correlation or journey or mutation_assertion or sanitize"
+      - name: Performance report (demo + baseline check)
+        run: |
+          mkdir -p ../artifacts/performance
+          python scripts/performance_report.py --demo --out ../artifacts/performance \
+            --baseline ../artifacts/performance/baselines/approved.json \
+            --check-baseline || true
+          # Device p95 is non-blocking; fail only on schema/contract above.
+          python scripts/performance_report.py --demo --out ../artifacts/performance
+      - name: Upload performance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: loading-performance-artifacts
+          path: artifacts/performance/

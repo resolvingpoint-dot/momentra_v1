@@ -214,38 +214,61 @@ class BusinessActivityEngine:
             after_payload={"action_type": at.value, "title": title, "payload": payload or {}},
         )
 
-        notify_summary: dict[str, Any] = {}
+        # Commit correctness-critical work before notify / projection invalidation.
+        await self.session.commit()
+
+        from app.domains.business.activity.projection_hint import wrap_mutation_response
         from app.domains.business.activity.types import (
             BUSINESS_OPERATIONS_ACTIONS,
             BUSINESS_RUNWAY_ACTIONS,
         )
-
-        if at in BUSINESS_OPERATIONS_ACTIONS or at in BUSINESS_RUNWAY_ACTIONS:
-            from app.domains.business.activity.business_notify_policy import (
-                apply_business_notify_policy,
-            )
-
-            notify_summary = await apply_business_notify_policy(
-                self.session,
-                action_type=at,
-                moment_id=moment_id,
-                actor_user_id=user_id,
-                event_id=event_id,
-                typed_row_id=typed_row_id,
-                title=title,
-                payload=payload,
-            )
-
-        from app.domains.business.activity.projection_hint import wrap_mutation_response
-        from app.domains.business.projection_cache import invalidate_business_projections
-
-        await invalidate_business_projections(
-            user_id, moment_id, moment_type=moment_type_code, reason=f"activity:{at.value}"
+        from app.domains.business.projection_cache import (
+            invalidate_business_projections_for_action,
         )
 
         activity = _to_dto(event, viewer_id=user_id, member=member, typed_row_id=typed_row_id)
+
+        from app.domains.shared.deferred_side_effects import schedule_deferred_side_effect
+
+        async def _post_commit_side_effects() -> None:
+            from app.core.database import async_session_factory
+
+            if async_session_factory is None:
+                raise RuntimeError("async_session_factory unavailable for deferred notify")
+            async with async_session_factory() as bg_session:
+                if at in BUSINESS_OPERATIONS_ACTIONS or at in BUSINESS_RUNWAY_ACTIONS:
+                    from app.domains.business.activity.business_notify_policy import (
+                        apply_business_notify_policy,
+                    )
+
+                    await apply_business_notify_policy(
+                        bg_session,
+                        action_type=at,
+                        moment_id=moment_id,
+                        actor_user_id=user_id,
+                        event_id=event_id,
+                        typed_row_id=typed_row_id,
+                        title=title,
+                        payload=payload,
+                    )
+                await invalidate_business_projections_for_action(
+                    user_id,
+                    moment_id,
+                    action_type=at.value,
+                    moment_type=moment_type_code,
+                    reason=f"activity:{at.value}",
+                )
+                await bg_session.commit()
+
+        schedule_deferred_side_effect(
+            "business_activity_notify_invalidate",
+            _post_commit_side_effects,
+            retries=1,
+            context={"event_id": str(event_id), "action": at.value},
+        )
+
         return wrap_mutation_response(
-            activity, op="create", notify=notify_summary or None
+            activity, op="create", notify={"deferred": True}
         )
 
     async def get(self, user_id: UUID, moment_id: UUID, event_id: UUID) -> dict:
@@ -480,6 +503,26 @@ class BusinessActivityEngine:
                 row.description = payload.get("description")
             if payload.get("currency") or payload.get("currency_code"):
                 row.currency = currency
+            if payload.get("vendor_name") is not None:
+                row.vendor_name = (str(payload.get("vendor_name") or "").strip() or None)
+            if payload.get("payment_method") or payload.get("payment_status") is not None:
+                from app.domains.business.activity.handlers.business_operations.spend_entry import (
+                    _normalize_payment,
+                )
+
+                method, status, paid_minor, due_minor = _normalize_payment(
+                    amount_minor=int(row.amount_minor or 0),
+                    payment_method=payload.get("payment_method") or row.payment_method,
+                    payment_status=payload.get("payment_status") or row.payment_status,
+                    amount_paid_raw=payload.get("amount_paid_minor", row.amount_paid_minor),
+                )
+                row.payment_method = method
+                row.payment_status = status
+                row.amount_paid_minor = paid_minor
+                payload["payment_method"] = method
+                payload["payment_status"] = status
+                payload["amount_paid_minor"] = paid_minor
+                payload["amount_due_minor"] = due_minor
             await self.session.flush()
             return
 

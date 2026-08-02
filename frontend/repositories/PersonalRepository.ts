@@ -128,6 +128,9 @@ export function invalidateAfterMasterExpense(includeRelationships: boolean) {
   }
   invalidatePersonalLifeCache();
   invalidateQuickAddOptionsCache();
+  void import("@/hooks/useMasterExpenseOptions").then((m) =>
+    m.invalidateMasterExpenseOptionsCache(),
+  );
 }
 
 export function invalidateAfterTemplateLifecycle(

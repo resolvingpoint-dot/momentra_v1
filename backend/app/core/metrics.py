@@ -181,4 +181,25 @@ def render_prometheus() -> str:
     lines.append(
         f"momentra_projection_cache_miss_total {int(proj.get('projection_cache_miss', 0))}"
     )
+    lines.append(
+        "# HELP momentra_deferred_side_effect_ok_total Post-commit side effects succeeded"
+    )
+    lines.append("# TYPE momentra_deferred_side_effect_ok_total counter")
+    lines.append(
+        f"momentra_deferred_side_effect_ok_total {int(proj.get('deferred_side_effect_ok', 0))}"
+    )
+    lines.append(
+        "# HELP momentra_deferred_side_effect_fail_total Post-commit side effects failed"
+    )
+    lines.append("# TYPE momentra_deferred_side_effect_fail_total counter")
+    lines.append(
+        f"momentra_deferred_side_effect_fail_total {int(proj.get('deferred_side_effect_fail', 0))}"
+    )
+    lines.append(
+        "# HELP momentra_deferred_side_effect_retry_total Post-commit side effect retries"
+    )
+    lines.append("# TYPE momentra_deferred_side_effect_retry_total counter")
+    lines.append(
+        f"momentra_deferred_side_effect_retry_total {int(proj.get('deferred_side_effect_retry', 0))}"
+    )
     return "\n".join(lines) + "\n"

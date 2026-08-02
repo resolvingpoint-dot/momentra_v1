@@ -158,11 +158,15 @@ class ProjectionBuilder:
         )
         timeline_count = int(count_result.scalar_one() or 0)
 
+        # Bound history for projection KPIs — avoid unbounded table scans.
         money_result = await session.execute(
-            select(PersonalMoneyEvents).where(
+            select(PersonalMoneyEvents)
+            .where(
                 PersonalMoneyEvents.moment_id == moment_id,
                 PersonalMoneyEvents.is_voided.is_(False),
             )
+            .order_by(PersonalMoneyEvents.event_date.desc(), PersonalMoneyEvents.created_at.desc())
+            .limit(500)
         )
         money_events = list(money_result.scalars().all())
 

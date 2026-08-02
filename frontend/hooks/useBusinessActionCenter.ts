@@ -6,6 +6,7 @@ import {
   fetchRendererMeta,
   createAction,
   type BusinessActionCatalogResponse,
+  type BusinessActivityResponse,
   type BusinessCatalogAction,
   type BusinessRendererMeta,
   type BusinessActivityPayload,
@@ -18,11 +19,35 @@ import {
 import { diskCacheLoad, diskCacheSave, dedupeFetch } from "@/lib/cache/cacheStore";
 import { FRESH_TTL_MS, STALE_TTL_MS } from "@/lib/cache/personalCacheTtl";
 
+/** Must match backend ACTION_CATALOG_SCHEMA_VERSION for cache validity. */
+export const BUSINESS_ACTION_CATALOG_SCHEMA_VERSION = 2;
+
 type CatalogEntry = { data: BusinessActionCatalogResponse; at: number };
 const catalogMem = new Map<string, CatalogEntry>();
 
 function catalogKey(momentId: string) {
-  return `business:action_catalog:${momentId}`;
+  return `business:action_catalog:v${BUSINESS_ACTION_CATALOG_SCHEMA_VERSION}:${momentId}`;
+}
+
+function catalogSchemaOk(data: BusinessActionCatalogResponse | null | undefined): boolean {
+  if (!data) return false;
+  const v = data.schema_version ?? 0;
+  return v === BUSINESS_ACTION_CATALOG_SCHEMA_VERSION || (v === 0 && (data.actions?.[0]?.fields?.length ?? 0) > 0);
+}
+
+function rendererMetaFromAction(action: BusinessCatalogAction): BusinessRendererMeta | null {
+  const fields = action.fields;
+  if (!fields?.length) return null;
+  return {
+    renderer_id: action.renderer_id,
+    label: action.label,
+    title: action.label,
+    fields,
+    required_fields: action.required_fields,
+    cta_label: action.cta_label,
+    supports: action.supports,
+    review_enabled: action.supports?.review !== false,
+  };
 }
 
 export function seedBusinessActionCatalog(
@@ -39,9 +64,9 @@ export function peekBusinessActionCatalog(
 ): BusinessActionCatalogResponse | null {
   const key = catalogKey(momentId);
   const mem = catalogMem.get(key);
-  if (mem && Date.now() - mem.at < STALE_TTL_MS) return mem.data;
+  if (mem && Date.now() - mem.at < STALE_TTL_MS && catalogSchemaOk(mem.data)) return mem.data;
   const disk = diskCacheLoad<BusinessActionCatalogResponse>(key, STALE_TTL_MS);
-  if (disk) {
+  if (disk && catalogSchemaOk(disk)) {
     catalogMem.set(key, { data: disk, at: Date.now() });
     return disk;
   }
@@ -72,7 +97,7 @@ export type UseBusinessActionCenterReturn = {
   recentIds: string[];
   selectAction: (actionId: string | null) => void;
   toggleFavorite: (actionId: string) => void;
-  submitAction: (payload: Record<string, unknown>) => Promise<void>;
+  submitAction: (payload: Record<string, unknown>) => Promise<BusinessActivityResponse>;
 };
 
 export function useBusinessActionCenter(
@@ -136,6 +161,14 @@ export function useBusinessActionCenter(
   useEffect(() => {
     if (!selectedAction) {
       setRendererMeta(null);
+      setRendererLoading(false);
+      return;
+    }
+    // Prefer fields embedded in action-catalog — avoid second /renderer RTT.
+    const embedded = rendererMetaFromAction(selectedAction);
+    if (embedded) {
+      setRendererMeta(embedded);
+      setRendererLoading(false);
       return;
     }
     let cancelled = false;

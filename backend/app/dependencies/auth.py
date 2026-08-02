@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,10 @@ from app.domains.users.service import UserService
 logger = logging.getLogger(__name__)
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+# Short-lived firebase_uid → internal user_id (membership not cached).
+_UID_CACHE_TTL_SEC = 30.0
+_uid_to_user_id: dict[str, tuple[UUID, float]] = {}
 
 
 async def get_current_user(
@@ -80,11 +85,22 @@ async def get_current_user_id(
     Reused by domain routers that scope data by owner. Depends on ``get_db`` so
     it shares the request-scoped session (and transaction) with the endpoint.
     """
-    user = await UserService(db).get_user(auth_user["uid"])
+    uid = auth_user["uid"]
+    now = time.monotonic()
+    cached = _uid_to_user_id.get(uid)
+    if cached and (now - cached[1]) < _UID_CACHE_TTL_SEC:
+        user_id = cached[0]
+        user_id_var.set(str(user_id))
+        request.state.user_id = str(user_id)
+        request.state.user_uid = uid
+        return user_id
+
+    user = await UserService(db).get_user(uid)
     if user is None:
+        _uid_to_user_id.pop(uid, None)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _uid_to_user_id[uid] = (user.id, now)
     user_id_var.set(str(user.id))
     request.state.user_id = str(user.id)
-    if auth_user.get("uid"):
-        request.state.user_uid = auth_user["uid"]
+    request.state.user_uid = uid
     return user.id
