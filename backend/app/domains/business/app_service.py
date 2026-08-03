@@ -223,8 +223,15 @@ class BusinessAppService:
         return moment
 
     async def _flip_setup(self, user_id: UUID) -> None:
+        """Draft create → BUSINESS SETUP. Never demote shared PULSE if Personal/Group live."""
         await self.modules.set_state(user_id, "BUSINESS", "SETUP", "business_moment_draft")
-        await self.modules.set_state(user_id, "PULSE", "SETUP", "business_moment_draft")
+        personal = await self.modules.get_state(user_id, "MY_MONEY")
+        group = await self.modules.get_state(user_id, "GROUP")
+        other_active = any(
+            row and (row.state or "").upper() == "ACTIVE" for row in (personal, group)
+        )
+        if not other_active:
+            await self.modules.set_state(user_id, "PULSE", "SETUP", "business_moment_draft")
         await self.bootstrap.invalidate_cache(user_id)
 
     async def _flip_active(self, user_id: UUID) -> None:
@@ -562,11 +569,16 @@ class BusinessAppService:
         user_id: UUID,
         moment_id: UUID,
         *,
-        local_id: str,
+        local_id: str | None = None,
         channel: str = "EMAIL",
+        role: str | None = None,
     ) -> dict:
         return await self.setup.invite_draft(
-            user_id, moment_id, local_id=local_id, channel=channel
+            user_id,
+            moment_id,
+            local_id=local_id,
+            channel=channel,
+            role=role,
         )
 
     async def archive_moment(self, user_id: UUID, moment_id: UUID) -> dict:

@@ -197,6 +197,7 @@ class MomentRepository:
 
         owned = await self.list_by_context(user_id, "BUSINESS")
         by_id: dict[UUID, MomentModel] = {m.id: m for m in owned}
+        member_ids: list[UUID] = []
 
         _allowed = frozenset({"active", "configured"})
         try:
@@ -216,12 +217,28 @@ class MomentRepository:
             status_val = (row.member_status or "").lower()
             if status_val not in _allowed:
                 continue
-            moment = await self.get_by_id(mid)
-            if moment is None:
-                continue
-            if (moment.context_type or "").upper() != "BUSINESS":
-                continue
-            by_id[moment.id] = moment
+            member_ids.append(mid)
+
+        if member_ids:
+            try:
+                result = await self.session.execute(
+                    select(MomentModel).where(MomentModel.id.in_(member_ids))
+                )
+                for moment in result.scalars().all():
+                    if (moment.context_type or "").upper() != "BUSINESS":
+                        continue
+                    by_id[moment.id] = moment
+            except Exception:
+                # Fallback: best-effort individual loads if IN query unsupported.
+                for mid in member_ids:
+                    if mid in by_id:
+                        continue
+                    moment = await self.get_by_id(mid)
+                    if moment is None:
+                        continue
+                    if (moment.context_type or "").upper() != "BUSINESS":
+                        continue
+                    by_id[moment.id] = moment
 
         def _sort_key(m: MomentModel) -> datetime:
             created = m.created_at

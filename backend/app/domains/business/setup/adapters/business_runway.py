@@ -30,6 +30,7 @@ from app.domains.business.setup.runway_mappers import (
     normalize_runway_answers,
 )
 from app.domains.business.setup.runway_permissions import member_permission_flags
+from app.domains.business.setup.member_roles import to_db_member_role
 from app.domains.business.setup.schemas import SetupPreviewResponse, SetupSummaryBlock
 from app.domains.moments.models import MomentModel
 
@@ -572,7 +573,7 @@ class BusinessRunwayAdapter:
             row = by_local.get(local_id) or (by_user.get(str(member_user)) if member_user else None)
             payload = {
                 "name": str(m.get("name") or role)[:255],
-                "role": role,
+                "role": to_db_member_role(role, template_code="business_runway"),
                 "member_status": status,
                 "added_by": uid,
                 "user_id": member_user,

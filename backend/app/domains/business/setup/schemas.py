@@ -99,8 +99,15 @@ class ActivateResponse(BaseModel):
 
 
 class BusinessSetupInviteDraftRequest(BaseModel):
-    local_id: str
+    """Setup member invite or switcher invite-with-role.
+
+    - Setup (existing member): pass ``local_id``; optional ``role`` updates that draft.
+    - Switcher (new teammate): pass ``role``; ``local_id`` may be omitted (server mints one).
+    """
+
+    local_id: str | None = None
     channel: str = "EMAIL"
+    role: str | None = None
 
 
 class BusinessSetupInviteDraftResponse(BaseModel):
@@ -115,3 +122,4 @@ class BusinessSetupInviteDraftResponse(BaseModel):
     whatsapp_text: str | None = None
     sms_text: str | None = None
     expires_at: str | None = None
+    role: str | None = None

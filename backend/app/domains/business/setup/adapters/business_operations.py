@@ -27,6 +27,7 @@ from app.domains.business.setup.business_operations_mappers import (
     normalize_operations_answers,
 )
 from app.domains.business.setup.business_operations_permissions import member_permission_flags
+from app.domains.business.setup.member_roles import to_db_member_role
 from app.domains.business.setup.business_operations_sync import (
     upsert_budget_allocations,
     upsert_operations_governance,
@@ -672,7 +673,7 @@ class BusinessOperationsAdapter:
             row = by_local.get(local_id) or (by_user.get(str(member_user)) if member_user else None)
             payload = {
                 "name": str(m.get("name") or role)[:255],
-                "role": role,
+                "role": to_db_member_role(role, template_code="business_operations"),
                 "member_status": status,
                 "added_by": uid,
                 "user_id": member_user,

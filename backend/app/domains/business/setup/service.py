@@ -59,7 +59,13 @@ class BusinessSetupService:
 
     async def _flip_setup(self, user_id: UUID) -> None:
         await self.modules.set_state(user_id, "BUSINESS", "SETUP", "business_moment_draft")
-        await self.modules.set_state(user_id, "PULSE", "SETUP", "business_moment_draft")
+        personal = await self.modules.get_state(user_id, "MY_MONEY")
+        group = await self.modules.get_state(user_id, "GROUP")
+        other_active = any(
+            row and (row.state or "").upper() == "ACTIVE" for row in (personal, group)
+        )
+        if not other_active:
+            await self.modules.set_state(user_id, "PULSE", "SETUP", "business_moment_draft")
         await self.bootstrap.invalidate_cache(user_id)
 
     async def _flip_active(self, user_id: UUID) -> None:
@@ -388,15 +394,28 @@ class BusinessSetupService:
                 detail="; ".join(errors),
             )
 
-        await adapter.commit_profile(
-            moment_id=str(moment.id), user_id=str(user_id), answers=answers
-        )
-        await adapter.commit_governance(
-            moment_id=str(moment.id), user_id=str(user_id), answers=answers
-        )
-        await adapter.commit_members(
-            moment_id=str(moment.id), user_id=str(user_id), answers=answers
-        )
+        try:
+            await adapter.commit_profile(
+                moment_id=str(moment.id), user_id=str(user_id), answers=answers
+            )
+            await adapter.commit_governance(
+                moment_id=str(moment.id), user_id=str(user_id), answers=answers
+            )
+            await adapter.commit_members(
+                moment_id=str(moment.id), user_id=str(user_id), answers=answers
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            from sqlalchemy.exc import IntegrityError, StatementError
+
+            if isinstance(exc, (IntegrityError, StatementError)):
+                logger.warning("Business activate commit failed: %s", exc)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Could not activate — check members and required fields, then retry",
+                ) from exc
+            raise
 
         owner = MembershipRecord(
             user_id=str(user_id),
@@ -738,32 +757,136 @@ class BusinessSetupService:
         user_id: UUID,
         moment_id: UUID,
         *,
-        local_id: str,
+        local_id: str | None = None,
         channel: str = "EMAIL",
+        role: str | None = None,
     ) -> dict:
+        from secrets import token_hex
+
         from sqlalchemy import select
 
         from app.domains.business.models import BusinessMomentInvitations
+        from app.domains.business.setup.invite_roles import validate_invitee_role
         from app.domains.business.setup.invites import mint_and_bind_invitation
+        from app.domains.invites.platform_service import (
+            PlatformInviteService,
+            opaque_creates_enabled,
+        )
 
         moment = await self._require_moment(user_id, moment_id)
+        await self._require_can_invite_members(user_id, moment)
+
         env = draft_store.read_envelope(moment) or {}
-        answers = env.get("answers") or {}
-        members = answers.get("members") or []
-        member = next(
-            (m for m in members if isinstance(m, dict) and str(m.get("local_id")) == local_id),
-            None,
-        )
-        if member is None:
+        answers = dict(env.get("answers") or {})
+        members: list = list(answers.get("members") or [])
+        if not isinstance(members, list):
+            members = []
+
+        resolved_role: str | None = None
+        if role is not None and str(role).strip():
+            try:
+                resolved_role = validate_invitee_role(
+                    role, moment_type=moment.moment_type
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(exc),
+                ) from exc
+
+        lid = (local_id or "").strip() or None
+        member: dict | None = None
+        if lid:
+            member = next(
+                (
+                    m
+                    for m in members
+                    if isinstance(m, dict) and str(m.get("local_id")) == lid
+                ),
+                None,
+            )
+
+        if resolved_role is not None:
+            if member is None:
+                lid = lid or f"invite-{token_hex(4)}"
+                member = {
+                    "local_id": lid,
+                    "name": "",
+                    "role": resolved_role,
+                    "invite_status": "pending",
+                    "invite_method": (channel or "LINK").upper(),
+                }
+                members.append(member)
+            else:
+                member["role"] = resolved_role
+                lid = str(member.get("local_id") or lid)
+            answers["members"] = members
+            answers["member_drafts"] = members
+            env["answers"] = answers
+            draft_store.write_envelope(moment, env)
+            await self._ensure_pending_business_member(
+                moment_id=moment_id,
+                user_id=user_id,
+                local_id=lid,
+                role_api=resolved_role,
+                moment_type=moment.moment_type,
+            )
+        elif member is None:
             raise HTTPException(status_code=404, detail="Member draft not found")
-        name = str(answers.get("team_name") or answers.get("moment_name") or moment.title or "Team")
+        else:
+            lid = str(member.get("local_id") or lid)
+            raw_role = member.get("role")
+            if raw_role:
+                resolved_role = str(raw_role).strip().upper()
+
+        assert lid is not None
+        name = str(
+            answers.get("team_name")
+            or answers.get("moment_name")
+            or moment.title
+            or "Team"
+        )
         ch = (channel or "EMAIL").upper()
+        role_for_mint = resolved_role or str(member.get("role") or "MEMBER").upper()
+
+        # Prefer opaque short URLs when enabled (parity with group switcher).
+        if opaque_creates_enabled():
+            minted = await PlatformInviteService(self.session).mint_opaque_moment_invite(
+                user_id,
+                moment,
+                role_code=role_for_mint,
+                max_uses=1,
+                metadata={
+                    "local_id": lid,
+                    "business_moment": True,
+                    "channel": ch,
+                },
+            )
+            link = minted.get("invite_url") or minted.get("invite_link") or ""
+            subject = f"You're invited to join {name}"
+            body = f"You're invited to join \"{name}\" on Momentra.\n\nOpen this link to accept:\n{link}\n"
+            whatsapp = f"Join our shared experience on Momentra: {name}\n{link}"
+            sms = f"Join our shared experience on Momentra: {name} {link}"
+            return {
+                "invite_id": minted.get("invite_id") or "",
+                "local_id": lid,
+                "channel": ch,
+                "invite_link": link,
+                "invite_code": minted.get("code") or minted.get("invite_code") or "",
+                "qr_payload": minted.get("qr_payload") or link,
+                "email_subject": subject,
+                "email_body": body,
+                "whatsapp_text": whatsapp,
+                "sms_text": sms,
+                "expires_at": minted.get("expires_at"),
+                "role": role_for_mint,
+            }
 
         # Prefer durable DB invite row when present (post-activate or prior commit).
         inv_result = await self.session.execute(
             select(BusinessMomentInvitations).where(
                 BusinessMomentInvitations.moment_id == moment_id,
-                BusinessMomentInvitations.local_id == local_id,
+                BusinessMomentInvitations.local_id == lid,
             )
         )
         try:
@@ -796,18 +919,135 @@ class BusinessSetupService:
                 experience_name=name,
                 mark_sent=False,
             )
-            # Drop raw token from API response.
             draft.pop("invite_token", None)
             draft.pop("token_hash", None)
+            draft["role"] = role_for_mint
             return draft
 
         draft = build_invite_draft_payload(
             moment_id=str(moment_id),
-            local_id=local_id,
+            local_id=lid,
             channel=ch,
             experience_name=name,
-            email=member.get("email"),
+            email=member.get("email") if isinstance(member, dict) else None,
         )
         draft.pop("invite_token", None)
         draft.pop("token_hash", None)
+        draft["role"] = role_for_mint
         return draft
+
+    async def _require_can_invite_members(self, user_id: UUID, moment: MomentModel) -> None:
+        from sqlalchemy import select
+
+        from app.domains.business.models import BusinessMomentMembers
+        from app.domains.business.setup.invite_roles import (
+            inviter_api_role_allowed,
+            inviter_db_role_allowed,
+        )
+
+        if moment.user_id == user_id:
+            return
+
+        env = draft_store.read_envelope(moment) or {}
+        answers = env.get("answers") or {}
+        for m in answers.get("members") or []:
+            if not isinstance(m, dict):
+                continue
+            uid = str(m.get("user_id") or "")
+            if uid and uid == str(user_id) and inviter_api_role_allowed(m.get("role")):
+                return
+
+        result = await self.session.execute(
+            select(BusinessMomentMembers).where(
+                BusinessMomentMembers.moment_id == moment.id,
+                BusinessMomentMembers.user_id == user_id,
+            )
+        )
+        try:
+            rows = list(result.scalars().all())
+        except Exception:
+            rows = []
+        for row in rows:
+            status_val = str(row.member_status or "").lower()
+            if status_val in {"removed"}:
+                continue
+            if inviter_db_role_allowed(row.role) or inviter_api_role_allowed(row.role):
+                return
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owners, admins, or team leads can invite teammates",
+        )
+
+    async def _ensure_pending_business_member(
+        self,
+        *,
+        moment_id: UUID,
+        user_id: UUID,
+        local_id: str,
+        role_api: str,
+        moment_type: str | None,
+    ) -> None:
+        """Upsert a pending BusinessMomentMembers row so accept can bind role."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from app.domains.business.models import BusinessMomentMembers, BusinessMoments
+        from app.domains.business.setup.member_roles import to_db_member_role
+        from app.domains.business.setup.team_ops_permissions import (
+            default_profile_for_role,
+            member_permission_flags,
+        )
+
+        # Only when business_moments row exists (activated / synced).
+        bm = await self.session.execute(
+            select(BusinessMoments).where(BusinessMoments.moment_id == moment_id)
+        )
+        if bm.scalar_one_or_none() is None:
+            return
+
+        result = await self.session.execute(
+            select(BusinessMomentMembers).where(
+                BusinessMomentMembers.moment_id == moment_id,
+                BusinessMomentMembers.local_id == local_id,
+            )
+        )
+        try:
+            existing = list(result.scalars().all())
+        except Exception:
+            existing = []
+        row = existing[0] if existing else None
+        db_role = to_db_member_role(role_api, template_code=moment_type or "team_operations")
+        flags = member_permission_flags(role_api)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if row is None:
+            row = BusinessMomentMembers(
+                member_id=uuid4(),
+                moment_id=moment_id,
+                name="Invited teammate",
+                role=db_role,
+                member_status="invited",
+                added_by=user_id,
+                local_id=local_id,
+                permission_profile=default_profile_for_role(role_api),
+                permission_version=1,
+                created_at=now,
+                updated_at=now,
+                can_manage_operations_settings=False,
+                **flags,
+            )
+            self.session.add(row)
+        else:
+            if str(row.member_status or "").lower() == "active" and row.user_id:
+                # Don't overwrite an active member; leave as-is.
+                return
+            row.role = db_role
+            row.member_status = "invited"
+            row.permission_profile = default_profile_for_role(role_api)
+            row.permission_version = 1
+            row.updated_at = now
+            for k, v in flags.items():
+                setattr(row, k, v)
+        await self.session.flush()

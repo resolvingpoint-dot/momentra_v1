@@ -415,7 +415,11 @@ async def setup_invite_draft(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return await _service(db).setup_invite_draft(
-        user_id, moment_id, local_id=body.local_id, channel=body.channel
+        user_id,
+        moment_id,
+        local_id=body.local_id,
+        channel=body.channel,
+        role=body.role,
     )
 
 
