@@ -36,6 +36,9 @@ class UserModel(Base):
     last_login_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -48,4 +51,30 @@ class UserModel(Base):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "last_login_at": self.last_login_at.isoformat(),
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
+
+
+class UserDeviceToken(Base):
+    """FCM registration tokens for push delivery."""
+
+    __tablename__ = "user_device_tokens"
+
+    token_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    platform: Mapped[str] = mapped_column(String(20), nullable=False)
+    fcm_token: Mapped[str] = mapped_column(Text, nullable=False)
+    app_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

@@ -62,3 +62,19 @@ def verify_firebase_token(token: str) -> dict[str, Any]:
         raise RuntimeError("Firebase not initialized")
     decoded = auth.verify_id_token(token, app=_firebase_app)
     return decoded
+
+
+def disable_or_delete_firebase_user(firebase_uid: str) -> None:
+    """Disable the Firebase user; fall back to delete if disable fails."""
+    if _firebase_app is None:
+        init_firebase()
+    if _firebase_app is None:
+        logger.warning("Firebase not initialized — skipping user disable for %s", firebase_uid)
+        return
+    try:
+        auth.update_user(firebase_uid, disabled=True, app=_firebase_app)
+        logger.info("Disabled Firebase user %s", firebase_uid)
+    except Exception:
+        logger.exception("update_user failed for %s; attempting delete", firebase_uid)
+        auth.delete_user(firebase_uid, app=_firebase_app)
+        logger.info("Deleted Firebase user %s", firebase_uid)

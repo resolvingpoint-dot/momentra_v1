@@ -38,6 +38,17 @@ async def update_preferences(
 
     pref_service = UserPreferenceService(db)
     updated = await pref_service.update_preferences_and_notify(user.id, body)
+
+    # Keep personal_user_preferences currency/timezone in sync (app prefs are canonical).
+    if body.default_currency_code is not None or body.timezone is not None:
+        from app.domains.personal.preferences_service import PersonalPreferencesService
+
+        await PersonalPreferencesService(db).sync_from_app_preferences(
+            user.id,
+            default_currency_code=body.default_currency_code,
+            timezone_name=body.timezone,
+        )
+
     await db.commit()
 
     cache_service = AppBootstrapService(db)

@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class PersonalAccountsSchema(BaseModel):
@@ -1097,3 +1097,49 @@ class PersonalUserPreferencesSchema(BaseModel):
     week_start_day: str | None = None
     default_account_id: UUID | None = None
     preferred_summary_time: time | None = None
+
+
+class PersonalUserPreferencesUpdateSchema(BaseModel):
+    """Partial update for personal settings (week start, notifications, privacy)."""
+
+    week_start_day: str | None = None
+    notification_enabled: bool | None = None
+    quick_add_reminder_enabled: bool | None = None
+    daily_summary_enabled: bool | None = None
+    privacy_mode_enabled: bool | None = None
+    preferred_summary_time: time | None = None
+    default_account_id: UUID | None = None
+    default_currency_code: str | None = None
+    timezone_name: str | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> PersonalUserPreferencesUpdateSchema:
+        if not any(
+            [
+                self.week_start_day is not None,
+                self.notification_enabled is not None,
+                self.quick_add_reminder_enabled is not None,
+                self.daily_summary_enabled is not None,
+                self.privacy_mode_enabled is not None,
+                "preferred_summary_time" in self.model_fields_set,
+                "default_account_id" in self.model_fields_set,
+                self.default_currency_code is not None,
+                self.timezone_name is not None,
+            ]
+        ):
+            raise ValueError("At least one preference field must be provided")
+        return self
+
+
+class BootstrapPersonalPreferencesSchema(BaseModel):
+    """Slim personal prefs embedded on app bootstrap."""
+
+    preference_id: str
+    user_id: str
+    week_start_day: str = "MONDAY"
+    notification_enabled: bool = True
+    quick_add_reminder_enabled: bool = False
+    daily_summary_enabled: bool = False
+    privacy_mode_enabled: bool = False
+    preferred_summary_time: str | None = None
+    default_account_id: str | None = None

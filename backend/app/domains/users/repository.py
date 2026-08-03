@@ -33,6 +33,9 @@ class UserRepository:
         now = datetime.now(timezone.utc)
         user = await self.get_by_firebase_uid(firebase_uid)
 
+        if user is not None and getattr(user, "deleted_at", None) is not None:
+            raise ValueError("Account has been deleted")
+
         if user is None:
             user = UserModel(
                 firebase_uid=firebase_uid,
