@@ -16,6 +16,11 @@ from app.domains.personal.schemas import (
 VALID_WEEK_START = {"MONDAY", "SUNDAY"}
 
 
+def _utc_naive() -> datetime:
+    """personal_user_preferences uses TIMESTAMP WITHOUT TIME ZONE."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class PersonalPreferencesService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -38,7 +43,7 @@ class PersonalPreferencesService:
         pref = await self.get_by_user_id(user_id)
         if pref is not None:
             return pref
-        now = datetime.now(timezone.utc)
+        now = _utc_naive()
         pref = PersonalUserPreferences(
             preference_id=uuid4(),
             user_id=user_id,
@@ -76,7 +81,7 @@ class PersonalPreferencesService:
             pref.default_currency_code = default_currency_code
         if timezone_name is not None:
             pref.timezone_name = timezone_name
-        pref.updated_at = datetime.now(timezone.utc)
+        pref.updated_at = _utc_naive()
         return pref
 
     async def update(
@@ -113,7 +118,7 @@ class PersonalPreferencesService:
         if body.timezone_name is not None:
             pref.timezone_name = body.timezone_name
 
-        pref.updated_at = datetime.now(timezone.utc)
+        pref.updated_at = _utc_naive()
         return pref
 
     def to_schema(self, pref: PersonalUserPreferences) -> PersonalUserPreferencesSchema:
