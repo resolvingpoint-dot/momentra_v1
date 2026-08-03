@@ -4,12 +4,12 @@ from __future__ import annotations
 import json
 import logging
 import time
-import uuid
 from typing import Callable
 
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.correlation import resolve_correlation_id, resolve_request_id
 from app.core.request_context import (
     begin_request_telemetry,
     build_coalesced_var,
@@ -46,8 +46,8 @@ def _extract_routing_hints(request: Request) -> None:
 
 async def observability_middleware(request: Request, call_next: Callable) -> Response:
     """Function middleware so ContextVar telemetry survives into route handlers."""
-    rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-    cid = request.headers.get("X-Correlation-ID") or rid
+    rid = resolve_request_id(request.headers.get("X-Request-ID"))
+    cid = resolve_correlation_id(request.headers.get("X-Correlation-ID"), fallback=rid)
     request.state.request_id = rid
     request.state.correlation_id = cid
     request_id_var.set(rid)
@@ -97,6 +97,12 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
         build_coalesced_var.set(obs["build_coalesced"])
     if obs.get("projection_version") is not None:
         projection_version_var.set(obs["projection_version"])
+    user_id = (
+        obs.get("user_id")
+        or user_id_var.get()
+        or getattr(request.state, "user_id", None)
+        or getattr(request.state, "user_uid", None)
+    )
     log_entry = {
         "request_id": rid,
         "correlation_id": cid,
@@ -105,7 +111,7 @@ async def observability_middleware(request: Request, call_next: Callable) -> Res
         "status": response.status_code,
         "duration_ms": round(duration_ms, 2),
         "cache_hit": cache_hit,
-        "user_id": user_id_var.get(),
+        "user_id": user_id,
         "context": context_var.get(),
         "template": template_var.get(),
         "outcome": "ok" if response.status_code < 400 else "client_error",

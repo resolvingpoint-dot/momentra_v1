@@ -23,6 +23,10 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DEBUG: "true"
+      ALLOW_TEST_AUTH: "true"
+      APP_SESSION_SECRET: ci-loading-performance-secret-not-for-prod
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
