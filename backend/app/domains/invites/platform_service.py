@@ -201,7 +201,7 @@ class PlatformInviteService:
         *,
         role_code: str = "PARTICIPANT",
         expires_in_days: int | None = None,
-        max_uses: int = 50,
+        max_uses: int = 1,
         metadata: dict | None = None,
     ) -> dict:
         """Mint an opaque invite for a moment already authorized by the caller."""
@@ -264,7 +264,7 @@ class PlatformInviteService:
         *,
         role_code: str = "PARTICIPANT",
         expires_in_days: int | None = None,
-        max_uses: int = 50,
+        max_uses: int = 1,
         metadata: dict | None = None,
     ) -> dict:
         from app.domains.moments.repository import MomentRepository

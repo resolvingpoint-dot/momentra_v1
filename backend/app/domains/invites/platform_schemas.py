@@ -56,6 +56,6 @@ class PlatformInviteListItem(BaseModel):
 
 class OpaqueGroupInviteCreateRequest(BaseModel):
     expires_in_days: int | None = None
-    max_uses: int = 50
+    max_uses: int = 1
     role_code: str = "PARTICIPANT"
     metadata: dict = Field(default_factory=dict)
