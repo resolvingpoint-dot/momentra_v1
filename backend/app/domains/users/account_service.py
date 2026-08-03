@@ -20,11 +20,11 @@ class AccountDeletionService:
         self.repo = UserRepository(session)
 
     async def soft_delete(self, user: UserModel) -> None:
-        """Mark user deleted, revoke sessions, clear device tokens, disable Firebase.
+        """Mark user deleted, revoke sessions, clear device tokens, delete Firebase Auth.
 
         Personal/group/business rows are retained (orphaned by soft-delete) so
         historical data is not hard-purged in this release. Auth is blocked via
-        ``deleted_at`` and Firebase disable/delete.
+        ``deleted_at``; Firebase Auth is hard-deleted so the email can sign up again.
         """
         now = datetime.now(timezone.utc)
         user.deleted_at = now
@@ -44,12 +44,12 @@ class AccountDeletionService:
         await self.session.flush()
 
         try:
-            from app.core.firebase import disable_or_delete_firebase_user
+            from app.core.firebase import delete_firebase_user
 
-            disable_or_delete_firebase_user(firebase_uid)
+            delete_firebase_user(firebase_uid)
         except Exception:
             logger.exception(
-                "Failed to disable Firebase user %s during account deletion",
+                "Failed to delete Firebase user %s during account deletion",
                 firebase_uid,
             )
 

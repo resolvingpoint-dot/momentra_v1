@@ -145,11 +145,11 @@ def test_app_preferences_syncs_personal_currency_timezone(
     assert pdata["timezone_name"] == "America/New_York"
 
 
-@patch("app.core.firebase.disable_or_delete_firebase_user")
+@patch("app.core.firebase.delete_firebase_user")
 @patch("app.dependencies.auth.verify_firebase_token")
 def test_delete_me(
     mock_verify,
-    mock_disable,
+    mock_delete_firebase,
     client: TestClient,
     mock_db,
     sample_user: UserModel,
@@ -162,7 +162,7 @@ def test_delete_me(
         headers={"Authorization": "Bearer fake-token"},
     )
     assert resp.status_code == 204
-    mock_disable.assert_called_once_with("test123")
+    mock_delete_firebase.assert_called_once_with("test123")
     assert sample_user.deleted_at is not None
     assert sample_user.display_name == "Deleted User"
     assert sample_user.email is None
