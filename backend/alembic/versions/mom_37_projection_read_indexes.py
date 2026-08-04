@@ -1,14 +1,17 @@
 """Projection read path indexes for memberships, money events, and group expenses.
 
 Revision ID: mom_37_projection_read_indexes
-Revises: mom_36_money_event_title
+Revises: mom_42_user_deleted_at
+
+Note: numbered mom_37 historically, but chains after mom_42 so it does not
+fork alongside mom_38 (which already revises mom_36).
 """
 from typing import Sequence, Union
 
 from alembic import op
 
 revision: str = "mom_37_projection_read_indexes"
-down_revision: Union[str, Sequence[str], None] = "mom_36_money_event_title"
+down_revision: Union[str, Sequence[str], None] = "mom_42_user_deleted_at"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
