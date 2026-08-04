@@ -267,9 +267,12 @@ class BusinessAppService:
             )
         return cards
 
-    def _map_moment(self, moment: MomentModel) -> s.BusinessMomentResponse:
+    def _map_moment(
+        self, moment: MomentModel, *, viewer_id: UUID | None = None
+    ) -> s.BusinessMomentResponse:
         raw = moment.moment_type or ""
         code = normalize_moment_type_code(raw) or raw
+        is_owned = viewer_id is None or moment.user_id == viewer_id
         return s.BusinessMomentResponse(
             moment_id=str(moment.id),
             moment_type_id=business_type_id(code),
@@ -277,6 +280,7 @@ class BusinessAppService:
             moment_name=moment.title or business_type_name(code),
             moment_description=moment.description,
             status=moment.status,
+            is_owned=is_owned,
         )
 
     def _pulse_payload_from_moments(self, moments: list[MomentModel]) -> dict:
@@ -499,7 +503,7 @@ class BusinessAppService:
         return s.BusinessSessionBootstrapResponse(
             pulse=s.BusinessPulseResponse(**pulse),
             moments_home=s.BusinessMomentsHomeResponse(**home),
-            moments=[self._map_moment(m) for m in visible],
+            moments=[self._map_moment(m, viewer_id=user_id) for m in visible],
             selected_workspace=selected_summary,
             workspaces=workspaces_payload,
             module_tiles=[
@@ -583,6 +587,9 @@ class BusinessAppService:
 
     async def archive_moment(self, user_id: UUID, moment_id: UUID) -> dict:
         return await self.setup.archive(user_id, moment_id)
+
+    async def leave_moment(self, user_id: UUID, moment_id: UUID) -> dict:
+        return await self.setup.leave(user_id, moment_id)
 
     async def complete_moment(self, user_id: UUID, moment_id: UUID) -> dict:
         return await self.setup.complete(user_id, moment_id)

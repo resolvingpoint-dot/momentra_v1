@@ -693,6 +693,103 @@ class BusinessSetupService:
             replacement_moment_type_code=repl_type,
         )
 
+
+    async def leave(self, user_id: UUID, moment_id: UUID) -> dict:
+        """Active member exits self; owner must archive/delete instead."""
+        from sqlalchemy import select
+
+        from app.domains.business.access import require_business_moment_access
+        from app.domains.business.models import BusinessMomentMembers
+        from app.domains.moment_engine.lifecycle_contract import (
+            deny_access,
+            log_lifecycle_transition,
+            pick_replacement_moment,
+        )
+        from app.domains.moments.repository import MomentRepository
+
+        moment = await require_business_moment_access(self.session, user_id, moment_id)
+        if (moment.context_type or "").upper() != BUSINESS_CONTEXT:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Moment not found"
+            )
+        if moment.user_id == user_id:
+            raise deny_access(
+                context_type=BUSINESS_CONTEXT,
+                moment_id=moment_id,
+                moment_type=moment.moment_type,
+                user_id=user_id,
+                action="leave",
+                denial_reason="owner_cannot_leave",
+                message="Owners must archive or delete the moment.",
+                owner_match=True,
+                membership_found=True,
+            )
+
+        previous = moment.status
+        code = normalize_moment_type_code(moment.moment_type or "") or (
+            moment.moment_type or ""
+        )
+
+        result = await self.session.execute(
+            select(BusinessMomentMembers).where(
+                BusinessMomentMembers.moment_id == moment_id,
+                BusinessMomentMembers.user_id == user_id,
+            )
+        )
+        for row in result.scalars().all():
+            if (row.member_status or "").lower() == "removed":
+                continue
+            row.member_status = "removed"
+
+        await self.session.flush()
+
+        inventory = [
+            m
+            for m in await MomentRepository(self.session).list_business_accessible(
+                user_id
+            )
+            if (m.status or "").upper() not in {"ARCHIVED", "DELETED"}
+            and m.id != moment.id
+        ]
+        if inventory:
+            await self.bootstrap.invalidate_cache(user_id)
+            try:
+                from app.domains.business.projection_cache import (
+                    invalidate_business_projections,
+                )
+
+                await invalidate_business_projections(
+                    user_id, moment_id, moment_type=code, reason="business_moment_left"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Business projection invalidate after leave failed: %s", exc)
+            module_state = "ACTIVE"
+        else:
+            await self._after_lifecycle_change(
+                user_id, moment_id, code=code, reason="business_moment_left"
+            )
+            module_state = "SETUP"
+
+        await self.session.commit()
+        repl_id, repl_type = pick_replacement_moment(inventory, exclude_id=moment.id)
+        log_lifecycle_transition(
+            context_type=BUSINESS_CONTEXT,
+            moment_id=moment.id,
+            moment_type=code,
+            action="leave",
+            previous_status=previous,
+            final_status=moment.status,
+            module_state=module_state,
+            replacement_moment_id=repl_id,
+        )
+        return self._lifecycle_payload(
+            moment,
+            previous_status=previous,
+            module_state=module_state,
+            replacement_moment_id=repl_id,
+            replacement_moment_type_code=repl_type,
+        )
+
     async def complete(self, user_id: UUID, moment_id: UUID) -> dict:
         """Complete via shared MomentEngine (Team Ops / Runway / Ops)."""
         moment = await self._require_moment(user_id, moment_id)

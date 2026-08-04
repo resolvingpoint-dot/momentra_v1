@@ -693,6 +693,86 @@ class GroupAppService:
             exclude_from_replacement=True,
         )
 
+
+    async def leave_moment(self, user_id: UUID, moment_id: UUID) -> dict:
+        """Active member exits self; owner must archive/delete instead."""
+        from sqlalchemy import select
+
+        from app.domains.group import moment_store as group_store
+        from app.domains.group.access import require_group_moment_access
+        from app.domains.group.models import GroupMomentMembers
+
+        moment = await require_group_moment_access(self.session, user_id, moment_id)
+        if (moment.context_type or "").upper() != GROUP_CONTEXT:
+            raise deny_access(
+                context_type=GROUP_CONTEXT,
+                moment_id=moment_id,
+                moment_type=moment.moment_type,
+                user_id=user_id,
+                action="leave",
+                denial_reason="context_mismatch",
+                message="This moment does not belong to Group.",
+                owner_match=moment.user_id == user_id,
+            )
+        if moment.user_id == user_id:
+            raise deny_access(
+                context_type=GROUP_CONTEXT,
+                moment_id=moment_id,
+                moment_type=moment.moment_type,
+                user_id=user_id,
+                action="leave",
+                denial_reason="owner_cannot_leave",
+                message="Owners must archive or delete the moment.",
+                owner_match=True,
+                membership_found=True,
+            )
+
+        previous = moment.status
+        now = datetime.now(timezone.utc)
+        naive = now.replace(tzinfo=None)
+
+        result = await self.session.execute(
+            select(GroupMomentMembers).where(
+                GroupMomentMembers.moment_id == moment_id,
+                GroupMomentMembers.user_id == user_id,
+            )
+        )
+        for row in result.scalars().all():
+            status_val = (row.status or "").upper()
+            if status_val in {"LEFT", "REMOVED", "DECLINED"} and row.left_at is not None:
+                continue
+            row.status = "LEFT"
+            row.left_at = naive
+
+        uid = str(user_id)
+        state = group_store.read_state(moment)
+        members = state.get("runtime", {}).get("members") or []
+        changed = False
+        for member in members:
+            if member.get("deleted"):
+                continue
+            member_uid = str(member.get("user_id") or member.get("id") or "")
+            if member_uid != uid:
+                continue
+            member["status"] = "LEFT"
+            member["deleted"] = True
+            member["left_at"] = now.isoformat()
+            member["updated_at"] = group_store.now_iso()
+            changed = True
+        if changed:
+            group_store.write_state(moment, state)
+
+        await self.session.flush()
+        return await self._run_lifecycle(
+            user_id,
+            moment,
+            previous_status=previous,
+            action="leave",
+            reason="group_moment_left",
+            flip_active=False,
+            exclude_from_replacement=True,
+        )
+
     # ----- setup flow ----------------------------------------------------- #
     async def setup_basics(self, user_id: UUID, moment_type: str, body: dict) -> dict:
         name = str(body.get("moment_name") or "").strip() or group_default_name(moment_type)

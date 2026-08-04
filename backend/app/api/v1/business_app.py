@@ -469,3 +469,13 @@ async def archive_moment(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return await _service(db).archive_moment(user_id, moment_id)
+
+
+@router.post("/moments/{moment_id}/leave")
+async def leave_moment(
+    moment_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Member exits a Business moment (owner must archive or delete)."""
+    return await _service(db).leave_moment(user_id, moment_id)

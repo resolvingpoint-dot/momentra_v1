@@ -276,6 +276,7 @@ class BusinessMomentResponse(BaseModel):
     status: str = "DRAFT"
     cover_image_url: str | None = None
     workspace_id: str | None = None
+    is_owned: bool = True
 
 
 class BusinessWorkspaceSummary(BaseModel):
