@@ -165,7 +165,15 @@ def _json_with_optional_refresh_cookie(
 
 async def _provision_user(db: AsyncSession, firebase_payload: dict) -> UserModel:
     user_service = UserService(db)
-    user = await user_service.sync_user(firebase_payload)
+    try:
+        user = await user_service.sync_user(firebase_payload)
+    except ValueError as exc:
+        if "deleted" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account has been deleted",
+            ) from exc
+        raise
     await UserPreferenceService(db).get_or_create(user.id)
     await ModuleStateService(db).ensure_defaults(user.id)
     return user

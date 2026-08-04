@@ -73,6 +73,17 @@ async def get_action_catalog(
     return await _svc(db).get_action_catalog(user_id, moment_id)
 
 
+@active_router.get("/{moment_id}/vendors/ledger")
+async def get_vendor_ledger(
+    moment_id: UUID,
+    vendor_name: str = Query(..., min_length=1, description="Vendor display name"),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Monthly purchase/payment ledger for one vendor on a Business Operations moment."""
+    return await _svc(db).get_vendor_ledger(user_id, moment_id, vendor_name)
+
+
 @active_router.get("/{moment_id}/actions/{action_key}/renderer")
 async def get_renderer_metadata(
     moment_id: UUID,
@@ -170,6 +181,64 @@ async def delete_activity(
     result = await _svc(db).delete_activity(user_id, moment_id, event_id)
     await db.commit()
     return result
+
+
+@active_router.post("/{moment_id}/activity/attachments/upload-url", status_code=201)
+async def activity_attachment_upload_url(
+    moment_id: UUID,
+    body: dict[str, Any],
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Signed upload URL for Quick Add attachments (receipts, PDFs, images)."""
+    from fastapi import HTTPException, status as http_status
+
+    from app.core.storage import (
+        assert_attachment_upload,
+        build_storage_path,
+        build_upload_url,
+    )
+    from app.domains.business.permissions import require_moment_read_access
+
+    await require_moment_read_access(db, moment_id, user_id)
+    try:
+        content_type = assert_attachment_upload(
+            content_type=body.get("content_type"),
+            byte_size=body.get("byte_size"),
+            purpose=body.get("purpose") or "business_activity",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    path = build_storage_path(f"business-activity/{moment_id}", content_type)
+    try:
+        upload_url = build_upload_url(path)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    return {"upload_url": upload_url, "storage_path": path}
+
+
+@active_router.post("/{moment_id}/activity/attachments/confirm")
+async def activity_attachment_confirm(
+    moment_id: UUID,
+    body: dict[str, Any],
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from fastapi import HTTPException, status as http_status
+
+    from app.core.storage import assert_storage_path_under, verify_stored_object
+    from app.domains.business.permissions import require_moment_read_access
+
+    await require_moment_read_access(db, moment_id, user_id)
+    raw = str(body.get("storage_path") or "")
+    try:
+        path = assert_storage_path_under(raw, f"business-activity/{moment_id}")
+        verify_stored_object(path)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {"storage_path": path}
 
 
 @router.get("/business/life")

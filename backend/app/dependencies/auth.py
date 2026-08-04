@@ -10,7 +10,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.request_context import user_id_var
 from app.core.firebase import verify_firebase_token
 from app.core.security import decode_session_token
 from app.domains.users.service import UserService
@@ -22,6 +21,26 @@ bearer_scheme = HTTPBearer(auto_error=False)
 # Short-lived firebase_uid → internal user_id (membership not cached).
 _UID_CACHE_TTL_SEC = 30.0
 _uid_to_user_id: dict[str, tuple[UUID, float]] = {}
+
+
+def invalidate_uid_cache(firebase_uid: str | None = None) -> None:
+    """Drop cached firebase_uid → user_id mappings (e.g. after soft-delete)."""
+    if firebase_uid is None:
+        _uid_to_user_id.clear()
+        return
+    _uid_to_user_id.pop(firebase_uid, None)
+
+
+def _record_user_identity(request: Request, *, uid: str, user_id: UUID | str | None = None) -> None:
+    """Persist identity for logs. ContextVars alone are lost across BaseHTTPMiddleware."""
+    from app.core.request_context import set_user_id
+
+    request.state.user_uid = uid
+    if user_id is not None:
+        request.state.user_id = str(user_id)
+        set_user_id(str(user_id))
+    else:
+        set_user_id(uid)
 
 
 async def get_current_user(
@@ -45,7 +64,7 @@ async def get_current_user(
     try:
         decoded = verify_firebase_token(token)
         uid = decoded["uid"]
-        request.state.user_uid = uid
+        _record_user_identity(request, uid=uid)
         return {"type": "firebase", "uid": uid, "payload": decoded}
     except Exception:
         pass
@@ -67,7 +86,7 @@ async def get_current_user(
         )
 
     uid = decoded["sub"]
-    request.state.user_uid = uid
+    _record_user_identity(request, uid=uid)
     return {
         "type": "session",
         "uid": uid,
@@ -86,21 +105,19 @@ async def get_current_user_id(
     it shares the request-scoped session (and transaction) with the endpoint.
     """
     uid = auth_user["uid"]
-    now = time.monotonic()
-    cached = _uid_to_user_id.get(uid)
-    if cached and (now - cached[1]) < _UID_CACHE_TTL_SEC:
-        user_id = cached[0]
-        user_id_var.set(str(user_id))
-        request.state.user_id = str(user_id)
-        request.state.user_uid = uid
-        return user_id
-
+    # Always resolve from DB so soft-deleted accounts cannot keep calling domain
+    # APIs via a still-valid access JWT (or a stale uid cache entry).
     user = await UserService(db).get_user(uid)
     if user is None:
         _uid_to_user_id.pop(uid, None)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if getattr(user, "deleted_at", None) is not None:
+        _uid_to_user_id.pop(uid, None)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been deleted",
+        )
+    now = time.monotonic()
     _uid_to_user_id[uid] = (user.id, now)
-    user_id_var.set(str(user.id))
-    request.state.user_id = str(user.id)
-    request.state.user_uid = uid
+    _record_user_identity(request, uid=uid, user_id=user.id)
     return user.id

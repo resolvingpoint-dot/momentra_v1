@@ -190,3 +190,55 @@ def test_group_active_pulse_after_create(mock_verify, client: TestClient, mock_d
 def test_group_requires_auth(mock_verify, client: TestClient, mock_db):
     resp = client.get("/api/v1/group/pulse")
     assert resp.status_code == 401
+
+
+@patch("app.dependencies.auth.verify_firebase_token")
+def test_member_archive_returns_403_not_owned(
+    mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
+    """Members who can see a moment get 403 moment_not_owned on archive, not 404."""
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from app.domains.group.models import GroupMomentMembers
+    from app.domains.moments.models import MomentModel
+
+    _auth(mock_verify)
+    mock_db.add(sample_user)
+
+    owner_id = uuid4()
+    moment_id = uuid4()
+    mock_db.add(
+        MomentModel(
+            id=moment_id,
+            user_id=owner_id,
+            context_type="GROUP",
+            moment_type="SHARED_EXPERIENCE",
+            title="Wedding",
+            status="ACTIVE",
+            setup_state="COMPLETE",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    mock_db.add(
+        GroupMomentMembers(
+            member_id=uuid4(),
+            moment_id=moment_id,
+            display_name="Guest",
+            role_code="PARTICIPANT",
+            status="ACTIVE",
+            created_at=datetime.now(timezone.utc),
+            user_id=sample_user.id,
+        )
+    )
+
+    resp = client.post(
+        f"/api/v1/group/moments/{moment_id}/archive",
+        headers=AUTH,
+    )
+    assert resp.status_code == 403
+    body = resp.json()
+    err = body.get("error") or {}
+    code = err.get("code") or body.get("detail") or ""
+    assert "moment_not_owned" in str(code) or "owner" in str(err.get("message", "")).lower()

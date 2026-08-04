@@ -180,6 +180,14 @@ class BusinessActiveService:
             force_refresh=force_refresh,
         )
 
+    async def get_vendor_ledger(
+        self, user_id: UUID, moment_id: UUID, vendor_name: str
+    ) -> dict:
+        from app.domains.business.vendor_ledger import build_vendor_ledger
+
+        await require_moment_read_access(self.session, moment_id, user_id)
+        return await build_vendor_ledger(self.session, moment_id, vendor_name)
+
     async def get_action_catalog(self, user_id: UUID, moment_id: UUID) -> dict:
         """Always fresh catalog (small payload); also warms quick_add cache."""
         from app.domains.business.action_catalog import build_action_catalog_payload
@@ -207,8 +215,14 @@ class BusinessActiveService:
             }
             for row in result.all()
         ]
+        from app.domains.business.vendor_suggestions import list_moment_vendors
+
+        vendors = await list_moment_vendors(self.session, moment_id)
         payload = build_action_catalog_payload(
-            moment_id=str(moment_id), moment_type=mt, members=members
+            moment_id=str(moment_id),
+            moment_type=mt,
+            members=members,
+            vendors=vendors,
         )
         return payload
 

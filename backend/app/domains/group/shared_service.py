@@ -260,6 +260,22 @@ class SharedGroupService:
         except Exception:
             pass
         store.ensure_creator_organizer(moment, user_id, display_name=display_name)
+        if category == cat.LIVING:
+            state = self._read_state(moment)
+            expected_residents = (state.get("payload") or {}).get("expected_residents")
+            try:
+                expected_residents = int(expected_residents) if expected_residents is not None else None
+            except (TypeError, ValueError):
+                expected_residents = None
+            store.seed_pending_residents(moment, expected_residents)
+        from app.domains.group.domain_row import ensure_group_moments_row
+
+        await ensure_group_moments_row(
+            self.session,
+            moment,
+            ensure_owner_member=True,
+            owner_display_name=display_name,
+        )
         await self._flip_active(user_id)
         if category == cat.EXPERIENCE:
             await SharedExperienceService(self.session).invalidate(user_id, moment_id, reason="activate")

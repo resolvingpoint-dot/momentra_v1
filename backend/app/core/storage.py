@@ -55,7 +55,7 @@ def allowed_content_types_for_purpose(purpose: str | None) -> frozenset[str]:
     key = (purpose or "").strip().lower()
     if key in ("memory", "memories", "media"):
         return _ALL_ATTACHMENT_CONTENT_TYPES
-    if key in ("receipt", "invoice", "document"):
+    if key in ("receipt", "invoice", "document", "business_activity", "activity"):
         return _IMAGE_CONTENT_TYPES | _PDF_CONTENT_TYPES
     # Default: images only (legacy receipt-style uploads)
     return _IMAGE_CONTENT_TYPES

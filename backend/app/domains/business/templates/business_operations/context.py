@@ -29,6 +29,8 @@ class OpsContext(BusinessProjectionContext):
     over_budget_allocations: list[dict[str, Any]] = field(default_factory=list)
     vendor_count: int = 0
     critical_vendor_count: int = 0
+    # casefold(vendor name) → outstanding spend due_minor for Moments Vendors cards
+    vendor_due_by_name: dict[str, int] = field(default_factory=dict)
     pending_approvals: int = 0
     overdue_approval_count: int = 0
     approved_recently: int = 0

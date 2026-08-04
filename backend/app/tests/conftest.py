@@ -22,6 +22,8 @@ class MockSession:
         self._stores: dict[str, dict] = {
             "users": {},
             "user_preferences": {},
+            "personal_user_preferences": {},
+            "user_device_tokens": {},
             "module_states": {},
             "moments": {},
             "business_workspaces": {},
@@ -146,6 +148,28 @@ class MockSession:
         result.scalar_one_or_none.return_value = vals[0] if vals else None
         return result
 
+    def _handle_personal_user_preferences(self, stmt: Any, result: MagicMock) -> MagicMock:
+        where = stmt.whereclause if hasattr(stmt, "whereclause") else None
+        if where is not None:
+            try:
+                val = where.right.value
+                item = self._get_from_store("personal_user_preferences", str(val))
+                if item is not None:
+                    result.scalar_one_or_none.return_value = item
+                    return result
+            except Exception:
+                pass
+        # Also match by scanning user_id on all rows
+        conds = self._extract_conditions(where)
+        if "user_id" in conds:
+            for item in self._get_store_values("personal_user_preferences"):
+                if str(getattr(item, "user_id", "")) == str(conds["user_id"]):
+                    result.scalar_one_or_none.return_value = item
+                    return result
+        vals = self._get_store_values("personal_user_preferences")
+        result.scalar_one_or_none.return_value = vals[0] if vals else None
+        return result
+
     def _handle_module_states(self, stmt: Any, result: MagicMock) -> MagicMock:
         where = stmt.whereclause if hasattr(stmt, "whereclause") else None
         if where is not None:
@@ -246,6 +270,10 @@ class MockSession:
             self._stores["users"][model.firebase_uid] = model
         elif table == "user_preferences":
             self._stores["user_preferences"][str(model.user_id)] = model
+        elif table == "personal_user_preferences":
+            if getattr(model, "preference_id", None) is None:
+                model.preference_id = uuid4()
+            self._stores["personal_user_preferences"][str(model.user_id)] = model
         elif table == "module_states":
             self._stores["module_states"][f"{model.user_id}:{model.module_key}"] = model
         elif table == "moments":

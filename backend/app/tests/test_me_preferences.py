@@ -157,6 +157,52 @@ def test_delete_me(
     _auth(mock_verify)
     _seed_prefs(mock_db, sample_user)
 
+    from uuid import uuid4
+
+    from app.domains.group.models import GroupMomentMembers
+    from app.domains.moments.models import MomentModel
+
+    moment_id = uuid4()
+    owned = MomentModel(
+        id=moment_id,
+        user_id=sample_user.id,
+        context_type="GROUP",
+        moment_type="SHARED_EXPERIENCE",
+        title="Wedding",
+        status="ACTIVE",
+        setup_state="COMPLETE",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    mock_db.add(owned)
+
+    member_moment_id = uuid4()
+    other_owner = uuid4()
+    member_row = GroupMomentMembers(
+        member_id=uuid4(),
+        moment_id=member_moment_id,
+        display_name="Guest",
+        role_code="PARTICIPANT",
+        status="ACTIVE",
+        created_at=datetime.now(timezone.utc),
+        user_id=sample_user.id,
+    )
+    mock_db.add(member_row)
+    # Keep other-owned moment so detach can leave membership without archiving it.
+    mock_db.add(
+        MomentModel(
+            id=member_moment_id,
+            user_id=other_owner,
+            context_type="GROUP",
+            moment_type="SHARED_EXPERIENCE",
+            title="Friend Wedding",
+            status="ACTIVE",
+            setup_state="COMPLETE",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+
     resp = client.delete(
         "/api/v1/me",
         headers={"Authorization": "Bearer fake-token"},
@@ -166,6 +212,28 @@ def test_delete_me(
     assert sample_user.deleted_at is not None
     assert sample_user.display_name == "Deleted User"
     assert sample_user.email is None
+    assert owned.status == "ARCHIVED"
+    assert member_row.status == "LEFT"
+    assert member_row.left_at is not None
+
+
+@patch("app.dependencies.auth.verify_firebase_token")
+def test_deleted_user_blocked_from_domain_apis(
+    mock_verify, client: TestClient, mock_db, sample_user: UserModel
+):
+    """Soft-deleted accounts must not keep calling group APIs with a live JWT."""
+    _auth(mock_verify)
+    mock_db.add(sample_user)
+    sample_user.deleted_at = datetime.now(timezone.utc)
+
+    resp = client.get(
+        "/api/v1/group/session",
+        headers={"Authorization": "Bearer fake-token"},
+    )
+    assert resp.status_code == 403
+    body = resp.json()
+    detail = body.get("detail") or body.get("error", {}).get("message") or ""
+    assert "deleted" in str(detail).lower()
 
 
 @patch("app.dependencies.auth.verify_firebase_token")

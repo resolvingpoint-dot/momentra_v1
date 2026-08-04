@@ -97,6 +97,13 @@ class LifestyleTemplateHandler(BaseTemplateHandler):
         invalidate_projection_cache(user_id)
         return result
 
+    async def delete_moment(
+        self, session: AsyncSession, user_id: UUID, moment_id: UUID
+    ) -> dict[str, Any]:
+        result = await super().delete_moment(session, user_id, moment_id)
+        invalidate_projection_cache(user_id)
+        return result
+
     async def complete_moment(
         self, session: AsyncSession, user_id: UUID, moment_id: UUID
     ) -> dict[str, Any]:

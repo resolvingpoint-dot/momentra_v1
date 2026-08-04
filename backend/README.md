@@ -14,6 +14,8 @@ Phase 1 backend foundation for Momentra.
 
 ## Architecture
 
+For the current architecture review and file tree, see [docs/BACKEND_ARCHITECTURE.md](docs/BACKEND_ARCHITECTURE.md).
+
 Clean Architecture with repository pattern and service layer:
 
 ```

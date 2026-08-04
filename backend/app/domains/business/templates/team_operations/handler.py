@@ -138,6 +138,7 @@ async def _load_activity(session: AsyncSession, moment_id: UUID) -> dict[str, An
             "occurred_at": str(e.occurred_at),
             "is_voided": e.is_voided,
             "source_moment_id": str(moment_id),
+            "created_by": str(e.created_by) if e.created_by else None,
         }
         for e in activity_rows
     ]
@@ -198,6 +199,15 @@ class TeamOpsTemplateBuilder:
             activity_bundle,
         ) = await _load_team_sections_concurrent(moment_id)
 
+        from app.domains.business.activity.projection_flags import enrich_activities_for_viewer
+
+        activities = await enrich_activities_for_viewer(
+            self.session,
+            moment_id,
+            user_id,
+            activity_bundle["activities"],
+        )
+
         ctx = TeamOpsContext(
             moment=moment,
             moment_id=moment.moment_id,
@@ -207,7 +217,7 @@ class TeamOpsTemplateBuilder:
             is_active=(moment.status or "").lower() == "active",
             member_count=member_count,
             activity_count=activity_bundle["activity_count"],
-            activities=activity_bundle["activities"],
+            activities=activities,
             team_name=(setup.team_name if setup else None) or moment.moment_name or "",
             operating_currency=(setup.currency if setup else None) or "INR",
             monthly_budget_minor=setup.monthly_budget_minor if setup else None,

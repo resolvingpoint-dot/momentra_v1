@@ -29,6 +29,7 @@ from app.domains.business.models import (
 from app.domains.business.templates.business_operations.context import OpsContext
 from app.domains.business.templates.business_operations.projector import refresh_ops_projections
 from app.domains.business.templates.business_operations.series_helpers import budget_usage_pct
+from app.domains.business.vendor_suggestions import list_moment_vendors, vendor_due_lookup
 
 
 def _minor_from_decimal(value, *, currency: str = "INR") -> int:
@@ -89,7 +90,9 @@ async def _load_members(session: AsyncSession, moment_id: UUID) -> dict[str, Any
     }
 
 
-async def _load_vendor_kpis(session: AsyncSession, moment_id: UUID) -> tuple[int, int]:
+async def _load_vendor_kpis(
+    session: AsyncSession, moment_id: UUID
+) -> tuple[int, int, dict[str, int]]:
     total = await session.execute(
         select(func.count())
         .select_from(OperationsVendorUpdates)
@@ -107,7 +110,12 @@ async def _load_vendor_kpis(session: AsyncSession, moment_id: UUID) -> tuple[int
             func.lower(OperationsVendorUpdates.impact_level).in_(["critical", "high"]),
         )
     )
-    return int(total.scalar_one() or 0), int(critical.scalar_one() or 0)
+    vendors = await list_moment_vendors(session, moment_id)
+    return (
+        int(total.scalar_one() or 0),
+        int(critical.scalar_one() or 0),
+        vendor_due_lookup(vendors),
+    )
 
 
 async def _load_approval_kpis(
@@ -298,6 +306,7 @@ async def _load_activity(session: AsyncSession, moment_id: UUID) -> dict[str, An
             "is_voided": e.is_voided,
             "source_moment_id": str(moment_id),
             "payload": e.payload or {},
+            "created_by": str(e.created_by) if e.created_by else None,
         }
         for e in activity_rows
     ]
@@ -445,7 +454,7 @@ class OpsTemplateBuilder:
         member_count = member_bundle["count"]
         member_picker = member_bundle["picker"]
         owner_name = member_bundle["owner_name"]
-        vendor_count, critical_vendor_count = vendor_kpis
+        vendor_count, critical_vendor_count, vendor_due_by_name = vendor_kpis
         pending_approvals = approval_kpis["pending"]
         overdue_approval_count = approval_kpis["overdue"]
         approved_recently = approval_kpis["approved_recently"]
@@ -462,6 +471,11 @@ class OpsTemplateBuilder:
         improvement_count = planned + in_progress
         activities = activity_bundle["activities"]
         last_updated = activity_bundle["last_updated"]
+        from app.domains.business.activity.projection_flags import enrich_activities_for_viewer
+
+        activities = await enrich_activities_for_viewer(
+            self.session, moment_id, user_id, activities
+        )
         _stage(timings, "members", t)
         _stage(timings, "vendors", t)
         _stage(timings, "approvals", t)
@@ -500,6 +514,7 @@ class OpsTemplateBuilder:
             over_budget_allocations=over_budget,
             vendor_count=vendor_count,
             critical_vendor_count=critical_vendor_count,
+            vendor_due_by_name=vendor_due_by_name,
             pending_approvals=pending_approvals,
             overdue_approval_count=overdue_approval_count,
             approved_recently=approved_recently,

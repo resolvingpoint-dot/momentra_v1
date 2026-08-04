@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.business.activity.handlers._helpers import parse_datetime
 from app.domains.business.models import BusinessActivityEvents, TeamMeetings
 
 
@@ -14,7 +15,7 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         moment_id=event.business_moment_id,
         event_id=event.event_id,
         title=payload.get("title") or event.title,
-        meeting_at=payload.get("meeting_at"),
+        meeting_at=parse_datetime(payload.get("meeting_at")),
         attendees=payload.get("attendees"),
         notes=payload.get("notes"),
         created_by=event.created_by,

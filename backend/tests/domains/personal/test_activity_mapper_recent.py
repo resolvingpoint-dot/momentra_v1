@@ -77,6 +77,7 @@ def test_mood_projection_only_from_explicit_labels():
     assert _mood_payload({"mood_state": "GOOD"}) == {
         "code": "GOOD",
         "label": "Good",
+        "emoji": "🙂",
         "intensity": None,
         "source": "PROJECTION",
     }
@@ -97,6 +98,39 @@ def test_map_timeline_expense_canonical_fields():
     assert item["mood"] is None
     assert item["impact_label"] == "Planned"
     assert item["editable"] is True
+
+
+def test_map_timeline_surfaces_place_and_with_whom_only_with_evidence():
+    item = map_timeline_to_recent_item(
+        _timeline(),
+        money=_money(),
+        catalog=_FakeCatalog(),
+    )
+    # No place/companion data captured for this event -> stay null, never fabricated.
+    assert item["place"] is None
+    assert item["with_whom"] is None
+
+    item_with_evidence = map_timeline_to_recent_item(
+        _timeline(impact_labels_json={"pressure_impact": "Planned", "place": "Cafe Luna", "with_whom": "Priya"}),
+        money=_money(),
+        catalog=_FakeCatalog(),
+    )
+    assert item_with_evidence["place"] == "Cafe Luna"
+    assert item_with_evidence["with_whom"] == "Priya"
+    assert item_with_evidence["raw_payload"]["place"] == "Cafe Luna"
+
+
+def test_map_timeline_mood_emoji_surfaced_when_available():
+    item = map_timeline_to_recent_item(
+        _timeline(
+            event_type="REFLECTION",
+            impact_labels_json={"mood_state": "STRESSED"},
+        ),
+        money=None,
+        catalog=_FakeCatalog(),
+    )
+    assert item["mood_emoji"] == "😣"
+    assert item["mood"]["emoji"] == "😣"
 
 
 def test_map_timeline_reflection_mood():

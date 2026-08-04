@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import delete_cached, get_cached, set_cached
+from app.core.errors import PermissionDeniedError
 from app.core.version_registry import get_platform_versions, sync_reference_data_version
 from app.domains.app_bootstrap.schemas import (
     BootstrapResponse,
@@ -44,6 +45,11 @@ class AppBootstrapService:
         user = await self.user_service.get_user(firebase_uid)
         if user is None:
             raise RuntimeError("User not found")
+        if getattr(user, "deleted_at", None) is not None:
+            raise PermissionDeniedError(
+                "Account has been deleted",
+                code="account_deleted",
+            )
 
         cache_key = f"app_bootstrap:{user.id}"
         cached = await get_cached(cache_key)
@@ -56,6 +62,8 @@ class AppBootstrapService:
 
     async def _build_bootstrap(self, user: UserModel) -> BootstrapResponse:
         pref = await self.pref_service.get_or_create(user.id)
+        # Heal context/module flags from inventory before clients resolve empty/setup.
+        await self._heal_module_states_from_inventory(user.id)
         module_states = await self.module_service.get_all_for_user(user.id)
 
         state_map = {ms.module_key: ms.state for ms in module_states}
@@ -98,9 +106,22 @@ class AppBootstrapService:
         sync_reference_data_version(ref_version)
         versions = get_platform_versions()
 
+        from app.domains.personal.preferences_service import PersonalPreferencesService
+        from app.domains.personal.schemas import BootstrapPersonalPreferencesSchema
+
+        personal_pref = await PersonalPreferencesService(self.session).get_or_create(
+            user.id,
+            default_currency_code=pref.default_currency_code,
+            timezone_name=pref.timezone,
+        )
+        personal_preferences = BootstrapPersonalPreferencesSchema(
+            **PersonalPreferencesService(self.session).to_bootstrap_dict(personal_pref)
+        )
+
         return BootstrapResponse(
             user=UserResponse.model_validate(user),
             preferences=pref,  # type: ignore[arg-type]
+            personal_preferences=personal_preferences,
             contexts=contexts,
             modules=module_entry_map,
             summary_counts=summary,
@@ -115,3 +136,53 @@ class AppBootstrapService:
 
     async def invalidate_cache(self, user_id) -> None:
         await delete_cached(f"app_bootstrap:{user_id}")
+
+    async def _heal_module_states_from_inventory(self, user_id) -> None:
+        """Promote SETUP/EMPTY → ACTIVE when ACTIVE moments exist.
+
+        Draft creates in Business/Group historically demoted shared ``PULSE`` (and
+        occasionally left ``MY_MONEY`` stuck at SETUP) even though Personal/Group
+        still had ACTIVE moments — clients then rendered brand-new empty/setup UX.
+        """
+        from sqlalchemy import func, select
+
+        from app.domains.moments.models import MomentModel
+
+        result = await self.session.execute(
+            select(MomentModel.context_type, func.count(MomentModel.id))
+            .where(
+                MomentModel.user_id == user_id,
+                MomentModel.status == "ACTIVE",
+            )
+            .group_by(MomentModel.context_type)
+        )
+        active_by_ctx = {row[0]: int(row[1]) for row in result}
+        if not active_by_ctx:
+            return
+
+        existing = await self.module_service.get_all_for_user(user_id)
+        state_map = {ms.module_key: (ms.state or "").upper() for ms in existing}
+        changed = False
+
+        async def _promote(key: str, reason: str) -> None:
+            nonlocal changed
+            if state_map.get(key) == "ACTIVE":
+                return
+            await self.module_service.set_state(user_id, key, "ACTIVE", reason)
+            state_map[key] = "ACTIVE"
+            changed = True
+
+        if active_by_ctx.get("MY_MONEY", 0) > 0:
+            await _promote("MY_MONEY", "bootstrap_heal_active_personal")
+            await _promote("MEMORY", "bootstrap_heal_active_personal")
+        if active_by_ctx.get("GROUP", 0) > 0:
+            await _promote("GROUP", "bootstrap_heal_active_group")
+        if active_by_ctx.get("BUSINESS", 0) > 0:
+            await _promote("BUSINESS", "bootstrap_heal_active_business")
+
+        if any(active_by_ctx.get(k, 0) > 0 for k in ("MY_MONEY", "GROUP", "BUSINESS")):
+            await _promote("PULSE", "bootstrap_heal_active_inventory")
+            await _promote("MOMENTS", "bootstrap_heal_active_inventory")
+
+        if changed:
+            await self.session.flush()

@@ -15,7 +15,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError, StateTransitionError
+from app.core.errors import NotFoundError, PermissionDeniedError, StateTransitionError
 from app.domains.app_bootstrap.service import AppBootstrapService
 from app.domains.group import app_schemas as s
 from app.domains.group.catalog import (
@@ -38,6 +38,8 @@ from app.domains.group.templates.shared_experience.active_mapper import (
     map_active_pulse,
 )
 from app.domains.group.templates.shared_experience.projection_builder import SharedExperienceProjectionBuilder
+from app.domains.group.access import require_group_moment_access
+from app.domains.group.domain_row import ensure_group_moments_row
 from app.domains.group.templates.shared_experience.quick_add import build_trip_quick_add_categories
 from app.domains.module_states.service import ModuleStateService
 from app.domains.moment_engine.engine import MomentEngine
@@ -154,11 +156,32 @@ class GroupAppService:
     async def _load_moment_inventories(
         self, user_id: UUID
     ) -> tuple[list[MomentModel], list[MomentModel], list[MomentModel], list[MomentModel]]:
-        """One inventory pass per request — owned ∪ member-accessible moments."""
+        """One inventory pass per request — owned ∪ member-accessible moments.
+
+        Owned moments are sorted ahead of invitee-accessible ones so switchers
+        prefer the caller's own ACTIVE moment when both share a type.
+        """
         all_moments = await self.moments.list_group_accessible(user_id)
+
+        # Owned first (newest within bucket) so focus_moment_id prefers the caller.
+        owned = [m for m in all_moments if m.user_id == user_id]
+        invited = [m for m in all_moments if m.user_id != user_id]
+        owned.sort(
+            key=lambda m: m.created_at or datetime(1970, 1, 1, tzinfo=timezone.utc),
+            reverse=True,
+        )
+        invited.sort(
+            key=lambda m: m.created_at or datetime(1970, 1, 1, tzinfo=timezone.utc),
+            reverse=True,
+        )
+        all_moments = owned + invited
         visible = [m for m in all_moments if _moment_is_visible(m)]
         active = [m for m in visible if _moment_is_active(m)]
-        replacement = [m for m in all_moments if _norm_status(m.status) != "ARCHIVED"]
+        replacement = [
+            m
+            for m in all_moments
+            if _norm_status(m.status) not in {"ARCHIVED", "DELETED"}
+        ]
         return all_moments, visible, active, replacement
 
     async def _visible_moments(self, user_id: UUID) -> list[MomentModel]:
@@ -186,12 +209,16 @@ class GroupAppService:
         )
 
     def _live_overview_from_moments(
-        self, moments: list[MomentModel], active: list[MomentModel]
+        self,
+        moments: list[MomentModel],
+        active: list[MomentModel],
+        *,
+        viewer_id: UUID | None = None,
     ) -> s.GroupLiveOverview:
         return s.GroupLiveOverview(
             active_moment_count=len(active),
             total_group_moment_count=len(moments),
-            live_cards=[self._map_list_item(m) for m in active],
+            live_cards=[self._map_list_item(m, viewer_id=viewer_id) for m in active],
         )
 
     def _session_fields_from_moments(
@@ -236,7 +263,14 @@ class GroupAppService:
         return latest
 
     async def _require_moment(self, user_id: UUID, moment_id: UUID) -> MomentModel:
-        moment = await self.moments.get_by_user_and_id(user_id, moment_id)
+        """Owner-only gate for mutations (patch/activate/archive).
+
+        Members who can see the moment get 403 ``moment_not_owned`` instead of
+        a misleading 404 so clients can show a permission message.
+        """
+        from app.domains.group.access import is_active_group_member
+
+        moment = await self.moments.get_by_id(moment_id)
         if moment is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Moment not found")
         if (moment.context_type or "").upper() != GROUP_CONTEXT:
@@ -246,6 +280,41 @@ class GroupAppService:
                 moment_type=moment.moment_type,
                 user_id=user_id,
                 action="require_moment",
+                denial_reason="context_mismatch",
+                message="This moment does not belong to Group.",
+                owner_match=moment.user_id == user_id,
+            )
+        if moment.user_id != user_id:
+            membership_found = await is_active_group_member(
+                self.session, user_id, moment_id, moment
+            )
+            if membership_found:
+                raise deny_access(
+                    context_type=GROUP_CONTEXT,
+                    moment_id=moment_id,
+                    moment_type=moment.moment_type,
+                    user_id=user_id,
+                    action="require_moment",
+                    denial_reason="moment_not_owned",
+                    message="Only the owner can change this moment.",
+                    owner_match=False,
+                    membership_found=True,
+                )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Moment not found")
+        return moment
+
+    async def _require_accessible_moment(
+        self, user_id: UUID, moment_id: UUID
+    ) -> MomentModel:
+        """Owner or active invitee — for pulse / moments / memory reads."""
+        moment = await require_group_moment_access(self.session, user_id, moment_id)
+        if (moment.context_type or "").upper() != GROUP_CONTEXT:
+            raise deny_access(
+                context_type=GROUP_CONTEXT,
+                moment_id=moment_id,
+                moment_type=moment.moment_type,
+                user_id=user_id,
+                action="require_accessible_moment",
                 denial_reason="context_mismatch",
                 message="This moment does not belong to Group.",
                 owner_match=moment.user_id == user_id,
@@ -296,8 +365,16 @@ class GroupAppService:
                 module_state = "ACTIVE"
             else:
                 await self.modules.set_state(user_id, "GROUP", "SETUP", reason)
-                await self.modules.set_state(user_id, "PULSE", "SETUP", reason)
-                await self.modules.set_state(user_id, "MOMENTS", "SETUP", reason)
+                # Shared PULSE/MOMENTS — only demote when no other context is live.
+                personal = await self.modules.get_state(user_id, "MY_MONEY")
+                business = await self.modules.get_state(user_id, "BUSINESS")
+                other_active = any(
+                    row and (row.state or "").upper() == "ACTIVE"
+                    for row in (personal, business)
+                )
+                if not other_active:
+                    await self.modules.set_state(user_id, "PULSE", "SETUP", reason)
+                    await self.modules.set_state(user_id, "MOMENTS", "SETUP", reason)
                 await self.bootstrap.invalidate_cache(user_id)
                 module_state = "SETUP"
         await self._invalidate_template_projections(user_id, moment_id, code, reason)
@@ -432,8 +509,11 @@ class GroupAppService:
             )
         return cards
 
-    def _map_list_item(self, moment: MomentModel) -> s.GroupMomentListItem:
+    def _map_list_item(
+        self, moment: MomentModel, *, viewer_id: UUID | None = None
+    ) -> s.GroupMomentListItem:
         code = moment.moment_type or ""
+        is_owned = viewer_id is None or moment.user_id == viewer_id
         return s.GroupMomentListItem(
             id=str(moment.id),
             name=moment.title or group_default_name(code),
@@ -443,6 +523,7 @@ class GroupAppService:
             status_tone="positive" if _moment_is_active(moment) else "neutral",
             orchestration_state=moment.setup_state,
             lifecycle_status=moment.status,
+            is_owned=is_owned,
             updated_at=(moment.updated_at or datetime.now(timezone.utc)).isoformat(),
         )
 
@@ -554,10 +635,10 @@ class GroupAppService:
     async def get_inventory(self, user_id: UUID) -> dict:
         _, visible, active, _ = await self._load_moment_inventories(user_id)
         pulse = self._pulse_payload_from_moments(visible, active)
-        overview = self._live_overview_from_moments(visible, active)
+        overview = self._live_overview_from_moments(visible, active, viewer_id=user_id)
         return s.GroupInventoryResponse(
             pulse=pulse,
-            moments=[self._map_list_item(m) for m in visible],
+            moments=[self._map_list_item(m, viewer_id=user_id) for m in visible],
             live_overview=overview,
         ).model_dump(mode="json")
 
@@ -565,11 +646,11 @@ class GroupAppService:
         """Thin composer for native clients — one inventory pass."""
         _, visible, active, _ = await self._load_moment_inventories(user_id)
         pulse = self._pulse_payload_from_moments(visible, active)
-        overview = self._live_overview_from_moments(visible, active)
+        overview = self._live_overview_from_moments(visible, active, viewer_id=user_id)
         fields = self._session_fields_from_moments(visible, active)
         return s.GroupSessionBootstrapResponse(
             pulse=pulse,
-            moments=[self._map_list_item(m) for m in visible],
+            moments=[self._map_list_item(m, viewer_id=user_id) for m in visible],
             live_overview=overview,
             **fields,
         ).model_dump(mode="json")
@@ -587,6 +668,7 @@ class GroupAppService:
             status="DRAFT",
             setup_state="SETUP",
         )
+        await ensure_group_moments_row(self.session, moment, ensure_owner_member=True)
         await self._flip_setup(user_id)
         return s.GroupDraftMomentResponse(
             moment_id=str(moment.id),
@@ -693,27 +775,40 @@ class GroupAppService:
             exclude_from_replacement=True,
         )
 
+    async def delete_moment(self, user_id: UUID, moment_id: UUID) -> dict:
+        """Permanent purge: ops data cleared, analytics retained, members exited."""
+        from app.domains.moments.purge_service import MomentPurgeService
+
+        moment = await self._require_moment(user_id, moment_id)
+        previous = moment.status
+        try:
+            moment = await MomentPurgeService(self.session).purge(
+                user_id, moment_id, expected_context=GROUP_CONTEXT
+            )
+        except PermissionDeniedError:
+            raise
+        except NotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Moment not found"
+            )
+        return await self._run_lifecycle(
+            user_id,
+            moment,
+            previous_status=previous,
+            action="delete",
+            reason="group_moment_deleted",
+            flip_active=False,
+            exclude_from_replacement=True,
+        )
 
     async def leave_moment(self, user_id: UUID, moment_id: UUID) -> dict:
         """Active member exits self; owner must archive/delete instead."""
         from sqlalchemy import select
 
         from app.domains.group import moment_store as group_store
-        from app.domains.group.access import require_group_moment_access
         from app.domains.group.models import GroupMomentMembers
 
-        moment = await require_group_moment_access(self.session, user_id, moment_id)
-        if (moment.context_type or "").upper() != GROUP_CONTEXT:
-            raise deny_access(
-                context_type=GROUP_CONTEXT,
-                moment_id=moment_id,
-                moment_type=moment.moment_type,
-                user_id=user_id,
-                action="leave",
-                denial_reason="context_mismatch",
-                message="This moment does not belong to Group.",
-                owner_match=moment.user_id == user_id,
-            )
+        moment = await self._require_accessible_moment(user_id, moment_id)
         if moment.user_id == user_id:
             raise deny_access(
                 context_type=GROUP_CONTEXT,
@@ -845,6 +940,7 @@ class GroupAppService:
                 details={"previous_status": previous, "requested_status": "ACTIVE"},
             ) from exc
         moment = await self._adapter.get_model(user_id, moment_id)
+        await ensure_group_moments_row(self.session, moment, ensure_owner_member=True)
         payload = await self._run_lifecycle(
             user_id,
             moment,
@@ -863,7 +959,7 @@ class GroupAppService:
     async def active_pulse(
         self, user_id: UUID, moment_id: UUID, *, force_refresh: bool = False
     ) -> dict:
-        moment = await self._require_moment(user_id, moment_id)
+        moment = await self._require_accessible_moment(user_id, moment_id)
         code = moment.moment_type or ""
         if code == "SHARED_EXPERIENCE":
             from app.core.request_context import set_cache_hit
@@ -905,7 +1001,7 @@ class GroupAppService:
     async def active_moments(
         self, user_id: UUID, moment_id: UUID, *, force_refresh: bool = False
     ) -> dict:
-        moment = await self._require_moment(user_id, moment_id)
+        moment = await self._require_accessible_moment(user_id, moment_id)
         code = moment.moment_type or ""
         if code == "SHARED_EXPERIENCE":
             from app.core.request_context import set_cache_hit
@@ -955,7 +1051,7 @@ class GroupAppService:
     async def active_memory(
         self, user_id: UUID, moment_id: UUID, *, force_refresh: bool = False
     ) -> dict:
-        moment = await self._require_moment(user_id, moment_id)
+        moment = await self._require_accessible_moment(user_id, moment_id)
         code = moment.moment_type or ""
         if code == "SHARED_EXPERIENCE":
             from app.core.request_context import set_cache_hit
@@ -1009,7 +1105,7 @@ class GroupAppService:
         ).model_dump(mode="json")
 
     async def quick_add_config(self, user_id: UUID, moment_id: UUID) -> dict:
-        moment = await self._require_moment(user_id, moment_id)
+        moment = await self._require_accessible_moment(user_id, moment_id)
         code = moment.moment_type or ""
         if code == "SHARED_EXPERIENCE":
             ctx = SharedExperienceProjectionBuilder(self.session).build_from_moment(moment)

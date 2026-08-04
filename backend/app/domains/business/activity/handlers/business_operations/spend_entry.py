@@ -14,6 +14,7 @@ from app.domains.business.models import (
     BusinessOperationsBudgetCategories,
     OperationsSpendEntries,
 )
+from app.domains.business.vendor_suggestions import spend_due_minor
 
 _SPEND_CATEGORIES = {
     "purchase",
@@ -28,6 +29,44 @@ _SPEND_CATEGORIES = {
     "rent",
     "other",
 }
+
+_PAYMENT_METHODS = {"cash", "upi", "credit"}
+_PAYMENT_STATUSES = {"paid_full", "paid_partial", "unpaid"}
+
+
+def _normalize_payment(
+    *,
+    amount_minor: int,
+    payment_method: str | None,
+    payment_status: str | None,
+    amount_paid_raw: Any,
+) -> tuple[str, str, int, int]:
+    method = (payment_method or "cash").strip().lower()
+    if method == "online":
+        method = "upi"
+    if method not in _PAYMENT_METHODS:
+        method = "cash"
+    status = (payment_status or "paid_full").strip().lower()
+    if status not in _PAYMENT_STATUSES:
+        status = "paid_full"
+
+    if status == "paid_full":
+        paid = amount_minor
+    elif status == "unpaid":
+        paid = 0
+    else:
+        try:
+            paid = int(amount_paid_raw) if amount_paid_raw is not None else 0
+        except (TypeError, ValueError):
+            paid = 0
+        paid = max(0, min(paid, amount_minor))
+
+    due = spend_due_minor(
+        amount_minor=amount_minor,
+        payment_status=status,
+        amount_paid_minor=paid,
+    )
+    return method, status, paid, due
 
 
 async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: dict[str, Any]) -> UUID:
@@ -44,6 +83,7 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         )
     fx = Decimal(str(payload.get("exchange_rate_to_operating_currency", 1)))
     safe_amount = amount if amount > 0 else Decimal("0.01")
+    amount_minor_int = int(amount_minor or 0)
 
     budget_category_id = payload.get("budget_category_id")
     if not budget_category_id:
@@ -76,6 +116,17 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
     notes = payload.get("description") or payload.get("notes")
     vendor = (payload.get("vendor_name") or "").strip() or None
 
+    method, status, paid_minor, due_minor = _normalize_payment(
+        amount_minor=amount_minor_int,
+        payment_method=payload.get("payment_method"),
+        payment_status=payload.get("payment_status"),
+        amount_paid_raw=payload.get("amount_paid_minor"),
+    )
+    payload["payment_method"] = method
+    payload["payment_status"] = status
+    payload["amount_paid_minor"] = paid_minor
+    payload["amount_due_minor"] = due_minor
+
     row = OperationsSpendEntries(
         moment_id=event.business_moment_id,
         event_id=event.event_id,
@@ -84,7 +135,7 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         spend_category=spend_category,
         currency=currency,
         amount=safe_amount,
-        amount_minor=int(amount_minor or 0),
+        amount_minor=amount_minor_int,
         exchange_rate_to_operating_currency=fx,
         amount_in_operating_currency=safe_amount * fx,
         spend_date=parse_date(payload.get("spend_date")),
@@ -93,6 +144,9 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         vendor_name=vendor,
         description=notes,
         is_voided=False,
+        payment_method=method,
+        payment_status=status,
+        amount_paid_minor=paid_minor,
     )
     session.add(row)
     await session.flush()

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from app.domains.module_states.schemas import ContextSchema
+from app.domains.personal.schemas import BootstrapPersonalPreferencesSchema
 from app.domains.preferences.schemas import UserPreferenceSchema
 from app.domains.users.schemas import UserResponse
 
@@ -22,6 +23,7 @@ class ModuleEntrySchema(BaseModel):
 class BootstrapResponse(BaseModel):
     user: UserResponse
     preferences: UserPreferenceSchema
+    personal_preferences: BootstrapPersonalPreferencesSchema | None = None
     contexts: list[ContextSchema]
     modules: dict[str, ModuleEntrySchema]
     summary_counts: SummaryCountsSchema

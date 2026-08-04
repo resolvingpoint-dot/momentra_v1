@@ -211,6 +211,47 @@ def ensure_creator_organizer(
     return member_row
 
 
+def seed_pending_residents(moment: MomentModel, expected_count: int | None) -> list[dict]:
+    """Backfill placeholder PENDING residents so headcount matches setup intent.
+
+    Idempotent: uses stable ``seed-resident-N`` ids so re-running activation never
+    duplicates rows, and never removes/overwrites residents a user already added.
+    """
+    if not expected_count or expected_count <= 0:
+        return []
+    state = read_state(moment)
+    rt = state.setdefault("runtime", _empty_runtime())
+    residents = rt.setdefault("residents", [])
+    guests = rt.get("guests", [])
+    current_count = len([r for r in residents if not r.get("deleted")]) + len(
+        [g for g in guests if not g.get("deleted")]
+    )
+    shortfall = expected_count - current_count
+    if shortfall <= 0:
+        return []
+    existing_seed_ids = {str(r.get("id")) for r in residents}
+    seeded: list[dict] = []
+    next_slot = current_count + 1
+    while len(seeded) < shortfall:
+        seed_id = f"seed-resident-{next_slot}"
+        next_slot += 1
+        if seed_id in existing_seed_ids:
+            continue
+        row = {
+            "id": seed_id,
+            "full_name": f"Resident {next_slot - 1}",
+            "relationship_type": "roommate",
+            "assigned_role": "MEMBER",
+            "status": "pending",
+            "is_placeholder": True,
+            "created_at": now_iso(),
+        }
+        residents.append(row)
+        seeded.append(row)
+    write_state(moment, state)
+    return seeded
+
+
 def expense_summary(moment: MomentModel) -> tuple[int, int]:
     """Return (count, total_minor) for stored expenses."""
     total = 0

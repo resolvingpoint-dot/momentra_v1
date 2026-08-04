@@ -7,6 +7,7 @@ from app.domains.personal.templates.relationships.constants import MOMENT_TYPE_C
 from app.domains.personal.templates.relationships.projection_builder import (
     RelationshipsProjectionContext,
 )
+from app.domains.personal.templates.pattern_evidence import gate_and_dedupe_patterns
 
 _RS = MOMENT_TYPE_CODE
 
@@ -71,22 +72,28 @@ def build_relationships_memory(ctx: RelationshipsProjectionContext) -> dict[str,
         "insight_body": "Your relational tone blends trust with warm presence.",
     }
 
-    behavioral_patterns = [
-        {
-            "pattern_id": "weekend_connections",
-            "icon": "weekend",
-            "title": "Weekend Connection Pattern",
-            "subtitle": "Meaningful contact clusters on weekends",
-            "confidence_percent": min(90, 50 + ctx.connection_count * 8),
+    behavioral_patterns = gate_and_dedupe_patterns(
+        [
+            {
+                "pattern_id": "weekend_connections",
+                "icon": "weekend",
+                "title": "Weekend Connection Pattern",
+                "subtitle": "Meaningful contact clusters on weekends",
+                "confidence_percent": min(90, 50 + ctx.connection_count * 8),
+            },
+            {
+                "pattern_id": "support_after_stress",
+                "icon": "volunteer_activism",
+                "title": "Support Response Pattern",
+                "subtitle": "Support logs follow challenging periods",
+                "confidence_percent": min(85, 45 + ctx.support_count * 6),
+            },
+        ],
+        evidence_counts={
+            "weekend_connections": ctx.connection_count,
+            "support_after_stress": ctx.support_count,
         },
-        {
-            "pattern_id": "support_after_stress",
-            "icon": "volunteer_activism",
-            "title": "Support Response Pattern",
-            "subtitle": "Support logs follow challenging periods",
-            "confidence_percent": min(85, 45 + ctx.support_count * 6),
-        },
-    ]
+    )
 
     evolution_timeline = [
         {"phase_id": "rebuilding", "label": "Rebuilding", "is_active": False},

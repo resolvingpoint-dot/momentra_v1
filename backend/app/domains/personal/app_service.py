@@ -559,6 +559,8 @@ class PersonalAppService:
     ) -> dict:
         """Thin composer — one inventory pass, derive selected-type pulse + moments_home."""
         _, visible, active, latest = await self._load_moment_inventories(user_id)
+        # Heal MY_MONEY/PULSE if ACTIVE inventory exists but module flags lagged at SETUP.
+        await self._sync_module_states(user_id, visible_moments=visible)
         pulse = await self._pulse_payload_from_moments(
             user_id,
             active,

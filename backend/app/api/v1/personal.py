@@ -171,6 +171,16 @@ async def template_moment_archive(
     return await _templates(db).archive_moment(user_id, moment_type, moment_id)
 
 
+@router.post("/templates/{moment_type}/moments/{moment_id}/delete")
+async def template_moment_delete(
+    moment_type: str,
+    moment_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await _templates(db).delete_moment(user_id, moment_type, moment_id)
+
+
 @router.post("/templates/{moment_type}/moments/{moment_id}/complete")
 async def template_moment_complete(
     moment_type: str,

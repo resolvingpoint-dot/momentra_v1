@@ -1581,6 +1581,8 @@ class OperationsSpendEntries(Base):
         CheckConstraint('exchange_rate_to_operating_currency > 0::numeric', name='chk_operations_spend_fx'),
         CheckConstraint("priority::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying]::text[])", name='chk_operations_spend_priority'),
         CheckConstraint("spend_category::text = ANY (ARRAY['purchase'::character varying, 'vendor_payment'::character varying, 'staff_cost'::character varying, 'utility_bill'::character varying, 'maintenance'::character varying, 'marketing_spend'::character varying, 'inventory_refill'::character varying, 'service_charge'::character varying, 'travel_expense'::character varying, 'other'::character varying]::text[])", name='chk_operations_spend_category'),
+        CheckConstraint("payment_method::text = ANY (ARRAY['cash'::character varying, 'upi'::character varying, 'credit'::character varying]::text[])", name='chk_operations_spend_payment_method'),
+        CheckConstraint("payment_status::text = ANY (ARRAY['paid_full'::character varying, 'paid_partial'::character varying, 'unpaid'::character varying]::text[])", name='chk_operations_spend_payment_status'),
         ForeignKeyConstraint(['budget_category_id'], ['business_operations_budget_categories.budget_category_id'], name='fk_operations_spend_budget_category'),
         ForeignKeyConstraint(['moment_id'], ['business_moments.moment_id'], name='fk_operations_spend_moment'),
         PrimaryKeyConstraint('spend_entry_id', name='operations_spend_entries_pkey'),
@@ -1612,6 +1614,9 @@ class OperationsSpendEntries(Base):
     event_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     amount_minor: Mapped[Optional[int]] = mapped_column(BigInteger)
     is_voided: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    payment_method: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'cash'::character varying"))
+    payment_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'paid_full'::character varying"))
+    amount_paid_minor: Mapped[Optional[int]] = mapped_column(BigInteger)
 
     budget_category: Mapped['BusinessOperationsBudgetCategories'] = relationship('BusinessOperationsBudgetCategories', back_populates='operations_spend_entries')
     moment: Mapped['BusinessMoments'] = relationship('BusinessMoments', back_populates='operations_spend_entries')
@@ -1623,7 +1628,7 @@ class OperationsVendorUpdates(Base):
     __table_args__ = (
         CheckConstraint("impact_level::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying]::text[])", name='chk_operations_vendor_impact'),
         CheckConstraint("vendor_category::text = ANY (ARRAY['inventory_vendor'::character varying, 'technology_vendor'::character varying, 'marketing_vendor'::character varying, 'service_vendor'::character varying, 'facility_vendor'::character varying, 'logistics_vendor'::character varying, 'professional_services'::character varying, 'equipment_supplier'::character varying, 'other'::character varying]::text[])", name='chk_operations_vendor_category'),
-        CheckConstraint("vendor_event_type::text = ANY (ARRAY['new_vendor'::character varying, 'vendor_evaluation'::character varying, 'vendor_issue'::character varying, 'contract_renewal'::character varying, 'payment_status'::character varying, 'contract_change'::character varying, 'vendor_suspension'::character varying, 'vendor_reactivation'::character varying, 'other'::character varying]::text[])", name='chk_operations_vendor_event_type'),
+        CheckConstraint("vendor_event_type::text = ANY (ARRAY['new_vendor'::character varying, 'vendor_evaluation'::character varying, 'vendor_issue'::character varying, 'contract_renewal'::character varying, 'payment_status'::character varying, 'contract_change'::character varying, 'vendor_suspension'::character varying, 'vendor_reactivation'::character varying, 'contact_update'::character varying, 'other'::character varying]::text[])", name='chk_operations_vendor_event_type'),
         CheckConstraint("vendor_status::text = ANY (ARRAY['active'::character varying, 'preferred_vendor'::character varying, 'under_review'::character varying, 'on_hold'::character varying, 'blocked'::character varying, 'terminated'::character varying]::text[])", name='chk_operations_vendor_status'),
         ForeignKeyConstraint(['moment_id'], ['business_moments.moment_id'], name='fk_operations_vendor_update_moment'),
         PrimaryKeyConstraint('vendor_update_id', name='operations_vendor_updates_pkey'),

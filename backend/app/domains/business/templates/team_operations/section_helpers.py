@@ -21,6 +21,8 @@ def event_item(a: dict[str, Any]) -> dict[str, Any]:
         "subtitle": a.get("subtitle"),
         "occurred_at": str(a.get("occurred_at") or ""),
         "source_moment_id": a.get("source_moment_id"),
+        "is_editable": bool(a.get("is_editable", False)),
+        "is_deletable": bool(a.get("is_deletable", False)),
     }
 
 

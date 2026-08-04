@@ -672,7 +672,7 @@ class BusinessSetupService:
         inventory = [
             m
             for m in await MomentRepository(self.session).list_by_context(user_id, BUSINESS_CONTEXT)
-            if (m.status or "").upper() != "ARCHIVED"
+            if (m.status or "").upper() not in {"ARCHIVED", "DELETED"}
         ]
         repl_id, repl_type = pick_replacement_moment(inventory, exclude_id=moment.id)
         log_lifecycle_transition(
@@ -693,6 +693,51 @@ class BusinessSetupService:
             replacement_moment_type_code=repl_type,
         )
 
+    async def delete(self, user_id: UUID, moment_id: UUID) -> dict:
+        """Permanent purge via MomentPurgeService (ops cleared, analytics kept)."""
+        from app.domains.moment_engine.lifecycle_contract import (
+            log_lifecycle_transition,
+            pick_replacement_moment,
+        )
+        from app.domains.moments.purge_service import MomentPurgeService
+        from app.domains.moments.repository import MomentRepository
+
+        moment = await self._require_moment(user_id, moment_id)
+        await self._require_owner(user_id, moment)
+        previous = moment.status
+        code = normalize_moment_type_code(moment.moment_type or "") or (moment.moment_type or "")
+        moment = await MomentPurgeService(self.session).purge(
+            user_id, moment_id, expected_context=BUSINESS_CONTEXT
+        )
+        await self._after_lifecycle_change(
+            user_id, moment_id, code=code, reason="business_moment_deleted"
+        )
+        await self.session.commit()
+        inventory = [
+            m
+            for m in await MomentRepository(self.session).list_by_context(
+                user_id, BUSINESS_CONTEXT
+            )
+            if (m.status or "").upper() not in {"ARCHIVED", "DELETED"}
+        ]
+        repl_id, repl_type = pick_replacement_moment(inventory, exclude_id=moment.id)
+        log_lifecycle_transition(
+            context_type=BUSINESS_CONTEXT,
+            moment_id=moment.id,
+            moment_type=code,
+            action="delete",
+            previous_status=previous,
+            final_status=moment.status,
+            module_state="SETUP",
+            replacement_moment_id=repl_id,
+        )
+        return self._lifecycle_payload(
+            moment,
+            previous_status=previous,
+            module_state="SETUP",
+            replacement_moment_id=repl_id,
+            replacement_moment_type_code=repl_type,
+        )
 
     async def leave(self, user_id: UUID, moment_id: UUID) -> dict:
         """Active member exits self; owner must archive/delete instead."""
@@ -822,7 +867,7 @@ class BusinessSetupService:
         inventory = [
             m
             for m in await MomentRepository(self.session).list_by_context(user_id, BUSINESS_CONTEXT)
-            if (m.status or "").upper() != "ARCHIVED"
+            if (m.status or "").upper() not in {"ARCHIVED", "DELETED"}
         ]
         repl_id, repl_type = pick_replacement_moment(
             inventory, exclude_id=moment.id, preferred_id=None

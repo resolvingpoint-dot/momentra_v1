@@ -86,8 +86,20 @@ async def build_life_operating_view(
     moment_id = moment.id
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=today_start.weekday())
-    last_week_start = week_start - timedelta(days=7)
+
+    from app.domains.personal.preferences_service import (
+        PersonalPreferencesService,
+        compute_week_bounds,
+    )
+
+    personal_pref = await PersonalPreferencesService(session).get_by_user_id(user_id)
+    week_start, last_week_start = compute_week_bounds(
+        now, personal_pref.week_start_day if personal_pref else "MONDAY"
+    )
+    # Align to same date-only semantics as today_start when tz-naive comparisons follow.
+    if week_start.tzinfo and not today_start.tzinfo:
+        week_start = week_start.replace(tzinfo=None)
+        last_week_start = last_week_start.replace(tzinfo=None)
 
     runtime_result = await session.execute(
         select(PersonalRuntimeSnapshots)

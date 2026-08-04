@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.business.activity.handlers._helpers import parse_date
 from app.domains.business.models import BusinessActivityEvents, RunwayRisks
 
 
@@ -22,6 +23,9 @@ async def handle(session: AsyncSession, event: BusinessActivityEvents, payload: 
         adjustment_required=bool(payload.get("adjustment_required")),
         created_by=event.created_by,
         owner_id=UUID(payload["owner_id"]) if payload.get("owner_id") else None,
+        target_resolution_date=parse_date(payload.get("target_resolution_date"))
+        if payload.get("target_resolution_date")
+        else None,
         description=payload.get("description"),
         amount_minor=payload.get("amount_minor"),
         currency_code=currency,

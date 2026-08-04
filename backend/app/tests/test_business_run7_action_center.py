@@ -73,6 +73,31 @@ def test_ops_approval_fields_include_approvers():
     assert "approver_ids" in meta["required_fields"]
 
 
+def test_ops_spend_vendor_picker_and_payment_fields():
+    meta = build_renderer_metadata("BUSINESS_OPERATIONS", "spend_entry")
+    assert meta is not None
+    by_key = {f["key"]: f for f in meta["fields"]}
+    assert by_key["vendor_name"]["field_type"] == "vendor_picker"
+    assert by_key["payment_method"]["field_type"] == "segmented"
+    assert {o["value"] for o in by_key["payment_method"]["options"]} == {"cash", "upi", "credit"}
+    assert by_key["payment_status"]["default"] == "paid_full"
+    assert by_key["amount_paid_minor"]["visible_when"] == {
+        "field": "payment_status",
+        "equals": "paid_partial",
+    }
+    vendor_meta = build_renderer_metadata("BUSINESS_OPERATIONS", "vendor_update")
+    assert vendor_meta is not None
+    vendor_field = next(f for f in vendor_meta["fields"] if f["key"] == "vendor_name")
+    assert vendor_field["field_type"] == "vendor_picker"
+
+    payload = build_action_catalog_payload(
+        moment_id="m",
+        moment_type="BUSINESS_OPERATIONS",
+        vendors=[{"value": "Acme", "label": "Acme · Due ₹600", "due_minor": 60000}],
+    )
+    assert payload["vendors"][0]["due_minor"] == 60000
+
+
 def test_renderer_metadata_by_action_id_and_type():
     meta = build_renderer_metadata("TEAM_OPERATIONS", "recognition")
     assert meta is not None

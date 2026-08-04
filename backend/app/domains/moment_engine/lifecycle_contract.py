@@ -12,7 +12,8 @@ from typing import Any, Iterable
 from uuid import UUID
 
 from app.core.errors import PermissionDeniedError, StateTransitionError
-from app.domains.moment_engine.state import ACTIVE, ARCHIVED, COMPLETED, DRAFT, PAUSED, SETUP
+from app.domains.moment_engine.state import ACTIVE, ARCHIVED, COMPLETED, DRAFT, PAUSED, SETUP, DELETED, is_hidden_from_inventory
+
 from app.domains.moments.models import MomentModel
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def _norm(value: str | None) -> str:
 
 
 def is_selectable(status: str | None) -> bool:
-    return _norm(status) != ARCHIVED and bool(_norm(status))
+    return not is_hidden_from_inventory(status) and bool(_norm(status))
 
 
 def pick_replacement_moment(
@@ -185,6 +186,7 @@ def build_lifecycle_response(
         "orchestration_state": moment.setup_state,
         "moment_name": moment.title,
         "is_archived": _norm(moment.status) == ARCHIVED,
+        "is_deleted": _norm(moment.status) == DELETED,
     }
     if extra:
         payload.update(extra)

@@ -6,7 +6,8 @@ import time
 from collections import defaultdict
 from typing import Callable
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -149,10 +150,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         allowed = await check_rate_limit(request, max_req, window)
         if not allowed:
-            raise HTTPException(
+            # Return a response — do not raise HTTPException from BaseHTTPMiddleware
+            # (Starlette turns that into an unhandled 500).
+            headers: dict[str, str] = {"Retry-After": str(window)}
+            origin = request.headers.get("origin")
+            if origin:
+                headers["Access-Control-Allow-Origin"] = origin
+                headers["Vary"] = "Origin"
+                headers["Access-Control-Allow-Credentials"] = "true"
+            return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many requests",
-                headers={"Retry-After": str(window)},
+                content={
+                    "error": {
+                        "code": "rate_limited",
+                        "message": "Too many requests",
+                    }
+                },
+                headers=headers,
             )
 
         return await call_next(request)

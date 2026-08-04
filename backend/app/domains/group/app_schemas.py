@@ -316,6 +316,7 @@ class GroupMomentListItem(BaseModel):
     orchestration_state: str | None = None
     readiness_score: float | None = None
     lifecycle_status: str | None = None
+    is_owned: bool = True
     trip_live_meta: dict | None = None
     updated_at: str = ""
 

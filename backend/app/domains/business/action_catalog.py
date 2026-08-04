@@ -12,7 +12,7 @@ from app.domains.business.activity.types import ActionType
 _FIELD = dict[str, Any]
 
 # Bump when catalog field shapes change so clients invalidate schema caches.
-ACTION_CATALOG_SCHEMA_VERSION = 2
+ACTION_CATALOG_SCHEMA_VERSION = 3
 
 
 def _text(key: str, label: str, *, required: bool = True, multiline: bool = False) -> _FIELD:
@@ -30,6 +30,11 @@ def _amount(key: str = "amount_minor", label: str = "Amount", *, required: bool 
 
 def _date(key: str, label: str, *, required: bool = False) -> _FIELD:
     return {"key": key, "label": label, "field_type": "date", "required": required}
+
+
+def _datetime(key: str, label: str, *, required: bool = False) -> _FIELD:
+    """Date + time field — use when time-of-day matters (e.g. meeting_at)."""
+    return {"key": key, "label": label, "field_type": "datetime", "required": required}
 
 
 def _searchable(
@@ -74,6 +79,16 @@ def _members(key: str, label: str, *, required: bool = False) -> _FIELD:
         "label": label,
         "field_type": "member_multi_select",
         "required": required,
+    }
+
+
+def _vendor_picker(key: str, label: str, *, required: bool = False) -> _FIELD:
+    return {
+        "key": key,
+        "label": label,
+        "field_type": "vendor_picker",
+        "required": required,
+        "allow_custom": True,
     }
 
 
@@ -180,7 +195,7 @@ TEAM_OPERATIONS_CATALOG: list[dict[str, Any]] = [
         "display_order": 30,
         "fields": [
             _text("title", "Meeting title"),
-            _date("meeting_at", "When", required=False),
+            _datetime("meeting_at", "When", required=False),
             _text("notes", "Notes", required=False, multiline=True),
         ],
         "required_fields": ["title"],
@@ -590,7 +605,36 @@ OPERATIONS_CATALOG: list[dict[str, Any]] = [
                     {"value": "other", "label": "Other"},
                 ],
             ),
-            _text("vendor_name", "Paid to / Vendor", required=False),
+            _vendor_picker("vendor_name", "Paid to / Vendor", required=False),
+            {
+                **_segmented(
+                    "payment_method",
+                    "Payment method",
+                    [
+                        {"value": "cash", "label": "Cash"},
+                        {"value": "upi", "label": "Online"},
+                    ],
+                ),
+                "default": "cash",
+            },
+            {
+                **_segmented(
+                    "payment_status",
+                    "Payment",
+                    [
+                        {"value": "paid_full", "label": "Paid completely"},
+                        {"value": "paid_partial", "label": "Partially paid"},
+                        {"value": "unpaid", "label": "Complete credit"},
+                    ],
+                ),
+                "default": "paid_full",
+            },
+            _amount_when(
+                "amount_paid_minor",
+                "Amount paid",
+                when_field="payment_status",
+                when_equals="paid_partial",
+            ),
             _date("spend_date", "Date", required=True),
             _text("description", "Notes", required=False, multiline=True),
             _attachment(),
@@ -617,7 +661,7 @@ OPERATIONS_CATALOG: list[dict[str, Any]] = [
         "display_order": 20,
         "notify_defaults": {"post_to_activity": True, "notify_managers": False},
         "fields": [
-            _text("vendor_name", "Vendor"),
+            _vendor_picker("vendor_name", "Vendor", required=True),
             _searchable(
                 "vendor_event_type",
                 "Update type",
@@ -883,6 +927,7 @@ def build_action_catalog_payload(
     moment_id: str,
     moment_type: str,
     members: list[dict[str, Any]] | None = None,
+    vendors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Hub + categories for Action Center (backend-owned catalog)."""
     stub = future_stub_for_moment_type(moment_type)
@@ -898,6 +943,7 @@ def build_action_catalog_payload(
             "categories": [],
             "actions": [],
             "members": members or [],
+            "vendors": vendors or [],
             "future_modules": [
                 {
                     "id": k.lower(),
@@ -931,8 +977,6 @@ def build_action_catalog_payload(
                 "display_order": a["display_order"],
                 "supports": a.get("supports") or {},
                 "notify_defaults": a.get("notify_defaults") or {},
-                "fields": a.get("fields") or [],
-                "required_fields": a.get("required_fields") or [],
             }
         )
     return {
@@ -961,6 +1005,7 @@ def build_action_catalog_payload(
             for a in sorted(actions, key=lambda x: x["display_order"])
         ],
         "members": members or [],
+        "vendors": vendors or [],
         "future_modules": [
             {
                 "id": k.lower(),

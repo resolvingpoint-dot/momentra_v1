@@ -89,6 +89,11 @@ async def build_memory_projection(
     )
     money_by_qa = money_events_by_quick_add(list(money_result.scalars().all()))
 
+    from app.domains.personal.preferences_service import PersonalPreferencesService
+
+    personal_pref = await PersonalPreferencesService(session).get_by_user_id(user_id)
+    week_start_day = personal_pref.week_start_day if personal_pref else "MONDAY"
+
     memories: list[dict[str, Any]] = []
     for row in timeline[:50]:
         money = money_by_qa.get(row.quick_add_event_id)
@@ -110,7 +115,10 @@ async def build_memory_projection(
 
     patterns = _build_patterns(timeline, money_by_qa)
     insights = _build_insights(
-        timeline, money_by_qa, recovery_count=_count_type(timeline, "RECOVERY")
+        timeline,
+        money_by_qa,
+        recovery_count=_count_type(timeline, "RECOVERY"),
+        week_start_day=week_start_day,
     )
     grouped = _group_timeline(memories)
 
@@ -176,6 +184,7 @@ def _build_insights(
     money_by_qa: dict[UUID, PersonalMoneyEvents],
     *,
     recovery_count: int,
+    week_start_day: str | None = "MONDAY",
 ) -> list[dict[str, Any]]:
     if len(timeline) < 3:
         return []
@@ -226,7 +235,11 @@ def _build_insights(
                 }
             )
 
-    week_spend, prev_week_spend = _week_spend_totals(expense_timeline, money_by_qa)
+    week_spend, prev_week_spend = _week_spend_totals(
+        expense_timeline,
+        money_by_qa,
+        week_start_day,
+    )
     if prev_week_spend > 0 and week_spend > 0:
         delta = int(round((week_spend - prev_week_spend) / prev_week_spend * 100))
         if abs(delta) >= 15:
@@ -269,12 +282,12 @@ def _recovery_streak_days(timeline: list[PersonalActivityTimeline]) -> int:
 def _week_spend_totals(
     expense_timeline: list[PersonalActivityTimeline],
     money_by_qa: dict[UUID, PersonalMoneyEvents],
+    week_start_day: str | None = "MONDAY",
 ) -> tuple[int, int]:
     now = datetime.now(timezone.utc)
-    week_start = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    last_week_start = week_start - timedelta(days=7)
+    from app.domains.personal.preferences_service import compute_week_bounds
+
+    week_start, last_week_start = compute_week_bounds(now, week_start_day)
 
     def naive(dt: datetime) -> datetime:
         return dt.replace(tzinfo=None) if dt.tzinfo else dt

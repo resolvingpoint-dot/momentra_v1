@@ -18,6 +18,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.business.activity.edit_schema import filter_patch
@@ -202,6 +203,19 @@ class BusinessActivityEngine:
         try:
             module = importlib.import_module(handler_path)
             typed_row_id = await module.handle(self.session, event, payload or {})
+        except HTTPException:
+            raise
+        except (IntegrityError, StatementError) as exc:
+            logger.warning(
+                "Handler %s constraint failure for event %s: %s",
+                handler_path,
+                event_id,
+                exc,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not save this activity — check required fields and try again",
+            ) from exc
         except Exception:
             logger.exception("Handler %s failed for event %s", handler_path, event_id)
             raise

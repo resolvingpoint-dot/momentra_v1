@@ -168,6 +168,16 @@ async def archive_moment(
     return await _service(db).archive_moment(user_id, moment_id)
 
 
+@router.post("/moments/{moment_id}/delete")
+async def delete_moment(
+    moment_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Permanently delete a Group moment (ops purged, analytics retained)."""
+    return await _service(db).delete_moment(user_id, moment_id)
+
+
 @router.post("/moments/{moment_id}/leave")
 async def leave_moment(
     moment_id: UUID,

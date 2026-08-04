@@ -46,6 +46,12 @@ class TemplateProjectionService:
         handler = self._handler(moment_type)
         return await handler.archive_moment(self.session, user_id, moment_id)
 
+    async def delete_moment(
+        self, user_id: UUID, moment_type: str, moment_id: UUID
+    ) -> dict:
+        handler = self._handler(moment_type)
+        return await handler.delete_moment(self.session, user_id, moment_id)
+
     async def complete_moment(
         self, user_id: UUID, moment_type: str, moment_id: UUID
     ) -> dict:

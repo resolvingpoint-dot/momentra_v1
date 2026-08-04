@@ -132,6 +132,7 @@ async def _load_activity(session: AsyncSession, moment_id: UUID) -> list[dict[st
             "occurred_at": str(e.occurred_at),
             "is_voided": e.is_voided,
             "source_moment_id": str(moment_id),
+            "created_by": str(e.created_by) if e.created_by else None,
         }
         for e in activity_rows
     ]
@@ -191,6 +192,12 @@ class RunwayTemplateBuilder:
             financial_update_count,
             activities,
         ) = await _load_runway_sections_concurrent(moment_id)
+
+        from app.domains.business.activity.projection_flags import enrich_activities_for_viewer
+
+        activities = await enrich_activities_for_viewer(
+            self.session, moment_id, user_id, activities
+        )
 
         cash_avail = _minor_from_row(runway_setup, "current_cash_minor", "cash_available")
         monthly_burn_setup = _minor_from_row(runway_setup, "monthly_burn_minor", "monthly_burn")

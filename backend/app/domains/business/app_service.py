@@ -177,7 +177,7 @@ class BusinessAppService:
 
     async def _inventory_for_replacement(self, user_id: UUID) -> list[MomentModel]:
         moments = await self.moments.list_business_accessible(user_id)
-        return [m for m in moments if (m.status or "").upper() != "ARCHIVED"]
+        return [m for m in moments if (m.status or "").upper() not in {"ARCHIVED", "DELETED"}]
 
     def _latest_by_code(self, moments: list[MomentModel]) -> dict[str, MomentModel]:
         """Pick the best linked moment per type (Personal parity).
@@ -418,7 +418,7 @@ class BusinessAppService:
             "revenue_today": None,
             "cash_balance": None,
         }
-        recent = [self._map_moment(m) for m in visible[:5]]
+        recent = [self._map_moment(m, viewer_id=user_id) for m in visible[:5]]
         return s.BusinessWorkspaceOverviewResponse(
             workspace_id=str(workspace_id),
             dashboard=s.BusinessDashboardSummary(**dash),
@@ -442,7 +442,7 @@ class BusinessAppService:
         return s.BusinessWorkspaceMomentsResponse(
             workspace_id=str(workspace_id),
             moments_home=s.BusinessMomentsHomeResponse(**home),
-            moments=[self._map_moment(m) for m in visible],
+            moments=[self._map_moment(m, viewer_id=user_id) for m in visible],
             pulse=s.BusinessPulseResponse(**pulse),
         ).model_dump(mode="json")
 
@@ -588,6 +588,9 @@ class BusinessAppService:
     async def archive_moment(self, user_id: UUID, moment_id: UUID) -> dict:
         return await self.setup.archive(user_id, moment_id)
 
+    async def delete_moment(self, user_id: UUID, moment_id: UUID) -> dict:
+        return await self.setup.delete(user_id, moment_id)
+
     async def leave_moment(self, user_id: UUID, moment_id: UUID) -> dict:
         return await self.setup.leave(user_id, moment_id)
 
@@ -669,7 +672,7 @@ class BusinessAppService:
                 replacement_moment_type_code=repl_type,
             )
         moment = await self._adapter.get_model(user_id, moment_id)
-        return self._map_moment(moment).model_dump(mode="json")
+        return self._map_moment(moment, viewer_id=user_id).model_dump(mode="json")
 
     # ----- cover upload --------------------------------------------------- #
     async def cover_upload_url(
@@ -706,4 +709,4 @@ class BusinessAppService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
             ) from exc
         moment.updated_at = datetime.now(timezone.utc)
-        return self._map_moment(moment).model_dump(mode="json")
+        return self._map_moment(moment, viewer_id=user_id).model_dump(mode="json")

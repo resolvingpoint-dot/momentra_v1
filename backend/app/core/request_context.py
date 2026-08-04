@@ -33,6 +33,7 @@ def begin_request_telemetry(request_id: str) -> None:
         "projection_version": None,
         "projection_build_ms": None,
         "build_coalesced": None,
+        "user_id": None,
     }
 
 
@@ -64,6 +65,13 @@ def get_request_context() -> dict[str, Any]:
     if (pv := projection_version_var.get()) is not None:
         ctx["projection_version"] = pv
     return ctx
+
+
+def set_user_id(user_id: str) -> None:
+    """Set user id for logs; mirrors onto request_id telemetry for BaseHTTPMiddleware."""
+    user_id_var.set(user_id)
+    if (entry := _touch_telemetry()) is not None:
+        entry["user_id"] = user_id
 
 
 def set_cache_hit(hit: bool) -> None:

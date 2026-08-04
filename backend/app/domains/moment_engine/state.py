@@ -8,15 +8,18 @@ ACTIVE = "ACTIVE"
 PAUSED = "PAUSED"
 COMPLETED = "COMPLETED"
 ARCHIVED = "ARCHIVED"
+DELETED = "DELETED"
 SETUP = "SETUP"
 
+# DELETED is a terminal purge tombstone (ops data cleared, analytics retained).
 _TRANSITIONS: dict[str, set[str]] = {
-    DRAFT: {ACTIVE, ARCHIVED},
-    SETUP: {ACTIVE, DRAFT, ARCHIVED},
-    ACTIVE: {PAUSED, COMPLETED, ARCHIVED},
-    PAUSED: {ACTIVE, COMPLETED, ARCHIVED},
-    COMPLETED: {ARCHIVED},
-    ARCHIVED: set(),
+    DRAFT: {ACTIVE, ARCHIVED, DELETED},
+    SETUP: {ACTIVE, DRAFT, ARCHIVED, DELETED},
+    ACTIVE: {PAUSED, COMPLETED, ARCHIVED, DELETED},
+    PAUSED: {ACTIVE, COMPLETED, ARCHIVED, DELETED},
+    COMPLETED: {ARCHIVED, DELETED},
+    ARCHIVED: {DELETED},
+    DELETED: set(),
 }
 
 
@@ -32,3 +35,9 @@ def assert_transition(from_status: str, to_status: str, *, label: str = "moment"
 
 def can_transition(from_status: str, to_status: str) -> bool:
     return to_status in _TRANSITIONS.get(from_status, set())
+
+
+def is_hidden_from_inventory(status: str | None) -> bool:
+    """Statuses that must never appear in switcher / active inventories."""
+    normalized = (status or "").strip().upper()
+    return normalized in {ARCHIVED, DELETED}

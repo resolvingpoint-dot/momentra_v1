@@ -75,42 +75,25 @@ async def cached_or_build(
         return envelope.payload
 
     if envelope is not None and envelope.stale:
-        # Serve stale immediately; rebuild in background so Pulse GETs stay fast.
-        record_cache_hit()
-        set_cache_hit(True)
-        set_projection_version(envelope.version)
+        # Rebuild synchronously. Background Celery refresh is best-effort and often
+        # unavailable locally; returning stale forever left pulse KPIs stuck at 0
+        # after Quick Add / expense writes.
+        record_cache_miss()
         logger.debug(
-            "GroupLoad template=%s moment=%s tab=%s source=stale-serve durationMs=%.1f",
+            "GroupLoad template=%s moment=%s tab=%s source=stale-rebuild durationMs=%.1f",
             moment_type,
             moment_id,
             slice_type,
             (time.perf_counter() - t0) * 1000,
         )
-
-        async def _bg_rebuild() -> None:
-            try:
-                await _get_or_build(
-                    user_id,
-                    moment_id,
-                    slice_type,
-                    build_fn,
-                    moment_type=moment_type,
-                    template=template,
-                )
-            except Exception:  # noqa: BLE001
-                logger.debug(
-                    "GroupLoad background rebuild failed template=%s moment=%s tab=%s",
-                    moment_type,
-                    moment_id,
-                    slice_type,
-                    exc_info=True,
-                )
-
-        try:
-            asyncio.get_running_loop().create_task(_bg_rebuild())
-        except RuntimeError:
-            pass
-        return envelope.payload
+        return await _get_or_build(
+            user_id,
+            moment_id,
+            slice_type,
+            build_fn,
+            moment_type=moment_type,
+            template=template,
+        )
 
     record_cache_miss()
     return await _get_or_build(

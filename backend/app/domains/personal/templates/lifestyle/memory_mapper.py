@@ -7,6 +7,7 @@ from app.domains.personal.templates.lifestyle.constants import MOMENT_TYPE_CODE
 from app.domains.personal.templates.lifestyle.projection_builder import (
     LifestyleProjectionContext,
 )
+from app.domains.personal.templates.pattern_evidence import gate_and_dedupe_patterns
 
 _LS = MOMENT_TYPE_CODE
 
@@ -71,22 +72,28 @@ def build_lifestyle_memory(ctx: LifestyleProjectionContext) -> dict[str, Any]:
         "insight_body": "Your emotional tone blends joyful experiences with restorative calm.",
     }
 
-    behavioral_patterns = [
-        {
-            "pattern_id": "weekend_experiences",
-            "icon": "weekend",
-            "title": "Weekend Experience Pattern",
-            "subtitle": "Memorable experiences cluster on weekends",
-            "confidence_percent": min(90, 50 + ctx.experience_count * 8),
+    behavioral_patterns = gate_and_dedupe_patterns(
+        [
+            {
+                "pattern_id": "weekend_experiences",
+                "icon": "weekend",
+                "title": "Weekend Experience Pattern",
+                "subtitle": "Memorable experiences cluster on weekends",
+                "confidence_percent": min(90, 50 + ctx.experience_count * 8),
+            },
+            {
+                "pattern_id": "wellbeing_mornings",
+                "icon": "wb_sunny",
+                "title": "Morning Wellbeing Anchor",
+                "subtitle": "Wellbeing logs favor morning routines",
+                "confidence_percent": min(85, 45 + ctx.wellbeing_count * 6),
+            },
+        ],
+        evidence_counts={
+            "weekend_experiences": ctx.experience_count,
+            "wellbeing_mornings": ctx.wellbeing_count,
         },
-        {
-            "pattern_id": "wellbeing_mornings",
-            "icon": "wb_sunny",
-            "title": "Morning Wellbeing Anchor",
-            "subtitle": "Wellbeing logs favor morning routines",
-            "confidence_percent": min(85, 45 + ctx.wellbeing_count * 6),
-        },
-    ]
+    )
 
     evolution_timeline = [
         {"phase_id": "exploring", "label": "Exploring", "is_active": False},

@@ -6,6 +6,7 @@ from typing import Any
 from app.domains.personal.templates.future_building.projection_builder import (
     FutureBuildingProjectionContext,
 )
+from app.domains.personal.templates.pattern_evidence import gate_and_dedupe_patterns
 
 _FB = "FUTURE_BUILDING"
 
@@ -70,22 +71,28 @@ def build_future_building_memory(ctx: FutureBuildingProjectionContext) -> dict[s
         "insight_body": "Your emotional tone is anchored in builder confidence and forward hope.",
     }
 
-    behavioral_patterns = [
-        {
-            "pattern_id": "tuesday_learning",
-            "icon": "event_available",
-            "title": "Tuesday Learning Pattern",
-            "subtitle": "Learning sessions cluster mid-week",
-            "confidence_percent": min(90, 50 + ctx.learning_count * 8),
+    behavioral_patterns = gate_and_dedupe_patterns(
+        [
+            {
+                "pattern_id": "tuesday_learning",
+                "icon": "event_available",
+                "title": "Tuesday Learning Pattern",
+                "subtitle": "Learning sessions cluster mid-week",
+                "confidence_percent": min(90, 50 + ctx.learning_count * 8),
+            },
+            {
+                "pattern_id": "morning_momentum",
+                "icon": "wb_sunny",
+                "title": "Morning Momentum Accelerator",
+                "subtitle": "Progress logs favor morning blocks",
+                "confidence_percent": min(85, 45 + ctx.progress_count * 6),
+            },
+        ],
+        evidence_counts={
+            "tuesday_learning": ctx.learning_count,
+            "morning_momentum": ctx.progress_count,
         },
-        {
-            "pattern_id": "morning_momentum",
-            "icon": "wb_sunny",
-            "title": "Morning Momentum Accelerator",
-            "subtitle": "Progress logs favor morning blocks",
-            "confidence_percent": min(85, 45 + ctx.progress_count * 6),
-        },
-    ]
+    )
 
     evolution_timeline = [
         {"phase_id": "exploring", "label": "Exploring", "is_active": False},

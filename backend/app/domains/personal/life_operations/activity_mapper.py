@@ -177,6 +177,26 @@ def _domain_label(moment_type_code: str | None, event_type: str | None) -> str:
     return "Personal"
 
 
+_MOOD_EMOJI: dict[str, str] = {
+    "GREAT": "😄",
+    "GOOD": "🙂",
+    "OKAY": "😐",
+    "LOW": "😔",
+    "STRESSED": "😣",
+    "GRATEFUL": "🙏",
+    "ANXIOUS": "😟",
+    "FOCUSED": "🎯",
+    "TIRED": "😴",
+    "MOTIVATED": "💪",
+}
+
+# Common quick-add payload keys that carry a place/venue or a companion, across
+# the different personal templates (life ops, lifestyle, relationships). Only
+# ever surfaced when present — never fabricated.
+_PLACE_KEYS = ("place", "location_label", "location", "venue", "location_context", "merchant")
+_WITH_WHOM_KEYS = ("with_whom", "person_name", "relationship_name", "companion", "attendees", "guest_name")
+
+
 def _mood_code(impact_labels: dict[str, Any]) -> str | None:
     raw = impact_labels.get("mood_state") or impact_labels.get("feeling_state")
     if not isinstance(raw, str) or not raw.strip():
@@ -190,6 +210,12 @@ def _mood_label_from_code(code: str | None) -> str | None:
     return _humanize_code(code)
 
 
+def _mood_emoji_from_code(code: str | None) -> str | None:
+    if not code:
+        return None
+    return _MOOD_EMOJI.get(code.strip().upper())
+
+
 def _mood_payload(impact_labels: dict[str, Any]) -> dict[str, Any] | None:
     code = _mood_code(impact_labels)
     if not code:
@@ -197,9 +223,31 @@ def _mood_payload(impact_labels: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "code": code,
         "label": _mood_label_from_code(code),
+        "emoji": _mood_emoji_from_code(code),
         "intensity": None,
         "source": "PROJECTION",
     }
+
+
+def _first_string(impact_labels: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    """Return the first present, non-empty string (or joined list) value for keys."""
+    for key in keys:
+        value = impact_labels.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, list) and value:
+            joined = ", ".join(str(v).strip() for v in value if str(v).strip())
+            if joined:
+                return joined
+    return None
+
+
+def _place_label(impact_labels: dict[str, Any]) -> str | None:
+    return _first_string(impact_labels, _PLACE_KEYS)
+
+
+def _with_whom_label(impact_labels: dict[str, Any]) -> str | None:
+    return _first_string(impact_labels, _WITH_WHOM_KEYS)
 
 
 def _primary_metric(
@@ -296,6 +344,9 @@ def map_timeline_to_recent_item(
 
     mood = _mood_payload(impact_labels)
     mood_label = mood["label"] if mood else None
+    mood_emoji = mood["emoji"] if mood else None
+    place = _place_label(impact_labels)
+    with_whom = _with_whom_label(impact_labels)
     amount_label = _format_amount_label(
         ref, amount_minor, currency_code, item.display_amount
     )
@@ -339,13 +390,19 @@ def map_timeline_to_recent_item(
         "category_label": category_label,
         "subcategory_label": subcategory_label,
         "mood_label": mood_label,
+        "mood_emoji": mood_emoji,
         "mood": mood,
+        "place": place,
+        "with_whom": with_whom,
         "domain": domain,
         "domain_label": domain_label,
         "type_label": type_label,
         "domain_type_subtitle": domain_type_subtitle,
         "primary_metric": primary_metric,
         "chips": chips,
+        # Full projection payload — lets clients/search surface any evidence-backed
+        # field (place, with_whom, notes, ...) without widening this signature again.
+        "raw_payload": impact_labels,
         # Legacy aliases for activity screen DTOs
         "event_type": item.event_type,
         "detail_line": item.display_subtitle or item.display_title,

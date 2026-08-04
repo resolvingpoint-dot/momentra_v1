@@ -78,6 +78,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        # Middleware / ASGI edge cases can surface HTTPException as a bare Exception.
+        if isinstance(exc, StarletteHTTPException):
+            return await _handle_http_exception(request, exc)
         logger.exception("Unhandled error on %s %s", request.method, request.url.path)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

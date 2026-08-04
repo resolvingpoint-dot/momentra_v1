@@ -152,6 +152,40 @@ class BaseTemplateHandler:
             await session.commit()
         return await self._lifecycle_moment_response(session, moment)
 
+    async def delete_moment(
+        self, session: AsyncSession, user_id: UUID, moment_id: UUID
+    ) -> dict[str, Any]:
+        from app.domains.moment_engine.lifecycle_contract import (
+            build_lifecycle_response,
+            pick_replacement_moment,
+        )
+        from app.domains.moments.purge_service import MomentPurgeService
+
+        await self._require_typed_moment(session, user_id, moment_id)
+        deps = await self._session_deps(session)
+        moment_before = await deps["adapter"].get_model(user_id, moment_id)
+        previous = moment_before.status
+        moment = await MomentPurgeService(session).purge(
+            user_id, moment_id, expected_context=PERSONAL_CONTEXT
+        )
+        await self._sync_module_states(session, user_id)
+        await session.commit()
+        all_moments, _, _, _ = await load_moment_inventories(session, user_id)
+        inventory = [
+            m
+            for m in all_moments
+            if (m.status or "").upper() not in {"ARCHIVED", "DELETED"}
+        ]
+        repl_id, repl_type = pick_replacement_moment(inventory, exclude_id=moment.id)
+        return build_lifecycle_response(
+            moment=moment,
+            context_type=PERSONAL_CONTEXT,
+            previous_status=previous,
+            module_state="SETUP",
+            replacement_moment_id=repl_id,
+            replacement_moment_type_code=repl_type,
+        )
+
     async def complete_moment(
         self, session: AsyncSession, user_id: UUID, moment_id: UUID
     ) -> dict[str, Any]:

@@ -7,6 +7,7 @@ from app.domains.business.templates.business_operations.section_helpers import (
     filter_actions,
     section_state,
 )
+from app.domains.business.vendor_suggestions import vendor_timeline_items
 
 _SPEND = {"SPEND_ENTRY"}
 _APPROVAL = {"OPS_APPROVAL_REQUEST"}
@@ -64,7 +65,7 @@ def build_moments(ctx: OpsContext) -> dict:
     spend = filter_actions(activities, _SPEND)
     approvals = filter_actions(activities, _APPROVAL)
     issues = filter_actions(activities, _ISSUE)
-    vendors = filter_actions(activities, _VENDOR)
+    vendors = vendor_timeline_items(activities, ctx.vendor_due_by_name, vendor_action_types=_VENDOR)
     improvements = filter_actions(activities, _IMPROVEMENT)
     timeline = [event_item(a) for a in activities]
     recent = [event_item(a) for a in activities[:10]]
