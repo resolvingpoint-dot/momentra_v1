@@ -14,19 +14,37 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user_id
 from app.domains.group import app_schemas as s
 from app.domains.group.app_service import GroupAppService
+from app.domains.group.moment_stream import group_moment_stream_response
 
 router = APIRouter(prefix="/group", tags=["group"])
 
 
 def _service(db: AsyncSession) -> GroupAppService:
     return GroupAppService(db)
+
+
+@router.get("/moments/{moment_id}/stream")
+async def group_moment_stream(
+    moment_id: UUID,
+    request: Request,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """SSE invalidate push for SHARED_EXPERIENCE / PURCHASE / LIVING moments."""
+    return await group_moment_stream_response(
+        moment_id=moment_id,
+        request=request,
+        user_id=user_id,
+        db=db,
+    )
 
 
 # --------------------------------------------------------------------------- #

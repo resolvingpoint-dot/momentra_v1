@@ -579,16 +579,21 @@ class PlatformInviteService:
             raise InviteOutcomeError("EXHAUSTED", "Invite has no remaining uses", 400)
 
         invite_svc = InviteService(self.session)
+        from app.domains.group.member_names import resolve_user_display_name
+        from app.domains.group.projection_cache import invalidate_group_projections
+
+        profile_name = await resolve_user_display_name(self.session, user_id)
         attached_id = invite_svc._attach_accepter(  # noqa: SLF001
             moment,
             user_id,
             participant_id=None,
             email=None,
+            display_name=profile_name,
         )
         await invite_svc._upsert_group_roster_member(  # noqa: SLF001
             moment,
             user_id,
-            display_name="Member",
+            display_name=profile_name,
             member_id=attached_id,
         )
         row.use_count += 1
@@ -596,6 +601,14 @@ class PlatformInviteService:
         if row.use_count >= row.max_uses:
             row.status = "EXHAUSTED"
         await self.session.flush()
+        await invalidate_group_projections(
+            user_id,
+            moment.id,
+            moment_type=moment.moment_type or "SHARED_EXPERIENCE",
+            reason="invite:opaque_accepted",
+            session=self.session,
+            moment=moment,
+        )
         await AppBootstrapService(self.session).invalidate_cache(user_id)
         try:
             await get_event_publisher().publish(

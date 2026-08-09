@@ -9,20 +9,17 @@ valid response. Registered before the legacy ``group.router``.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any, AsyncIterator
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import cache as core_cache
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user_id
 from app.domains.group import trip_schemas as t
-from app.domains.group.group_moment_events import invalidate_channel
 from app.domains.group.trip_service import TripService
 from app.domains.group.trip_deep_service import TripDeepService
 
@@ -30,8 +27,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/group/trips", tags=["group"])
 options_router = APIRouter(prefix="/group", tags=["group"])
-
-_SSE_HEARTBEAT_S = 15.0
 
 
 def _service(db: AsyncSession) -> TripService:
@@ -49,82 +44,16 @@ async def trip_moment_stream(
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
-    """SSE: projection invalidate push for a trip moment.
+    """SSE alias for trip moments — shared handler for all Group templates."""
+    from app.domains.group.moment_stream import group_moment_stream_response
 
-    Auth via Bearer (same as other routes). If Redis is unavailable, keep
-    heartbeat-only so clients can fall back to pull-to-refresh.
-    """
-    await _service(db).assert_access(user_id, moment_id)
-    channel = invalidate_channel(moment_id)
-
-    async def event_gen() -> AsyncIterator[str]:
-        redis = await core_cache.get_redis()
-        if redis is None:
-            logger.info(
-                "trip stream heartbeat-only (no Redis) moment=%s user=%s",
-                moment_id,
-                user_id,
-            )
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    yield ": ping\n\n"
-                    await asyncio.sleep(_SSE_HEARTBEAT_S)
-            except asyncio.CancelledError:
-                pass
-            return
-
-        pubsub = redis.pubsub()
-        try:
-            await pubsub.subscribe(channel)
-            while True:
-                if await request.is_disconnected():
-                    break
-                message = await pubsub.get_message(
-                    ignore_subscribe_messages=True,
-                    timeout=_SSE_HEARTBEAT_S,
-                )
-                if message is None:
-                    yield ": ping\n\n"
-                    continue
-                if message.get("type") != "message":
-                    continue
-                data = message.get("data")
-                if data is None:
-                    continue
-                if isinstance(data, bytes):
-                    data = data.decode("utf-8", errors="replace")
-                yield f"event: invalidate\ndata: {data}\n\n"
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.warning(
-                "trip stream error moment=%s user=%s",
-                moment_id,
-                user_id,
-                exc_info=True,
-            )
-        finally:
-            try:
-                await pubsub.unsubscribe(channel)
-                close = getattr(pubsub, "aclose", None) or getattr(pubsub, "close", None)
-                if close is not None:
-                    result = close()
-                    if asyncio.iscoroutine(result):
-                        await result
-            except Exception:
-                pass
-
-    return StreamingResponse(
-        event_gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+    return await group_moment_stream_response(
+        moment_id=moment_id,
+        request=request,
+        user_id=user_id,
+        db=db,
     )
+
 
 
 @router.get("/{moment_id}/live-hub")

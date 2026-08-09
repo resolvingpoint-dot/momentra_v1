@@ -858,6 +858,16 @@ class GroupAppService:
             group_store.write_state(moment, state)
 
         await self.session.flush()
+        from app.domains.group.projection_cache import invalidate_group_projections
+
+        await invalidate_group_projections(
+            user_id,
+            moment_id,
+            moment_type=moment.moment_type or "SHARED_EXPERIENCE",
+            reason="group_moment_left",
+            session=self.session,
+            moment=moment,
+        )
         return await self._run_lifecycle(
             user_id,
             moment,

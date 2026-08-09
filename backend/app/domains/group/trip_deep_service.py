@@ -315,8 +315,11 @@ class TripDeepService:
             store.ensure_creator_organizer(moment, moment.user_id or user_id, display_name=display_name)
             await self.session.flush()
             members = store.list_accepted_members(moment)
-        return members
+        from app.domains.group.member_names import enrich_member_display_names
 
+        return await enrich_member_display_names(
+            self.session, moment, members, write_back=True
+        )
     async def _user_default_currency(self, user_id: UUID) -> str | None:
         try:
             from app.domains.preferences.repository import UserPreferenceRepository
@@ -433,6 +436,8 @@ class TripDeepService:
             moment_id,
             moment_type=m.moment_type or "SHARED_EXPERIENCE",
             reason="expense:update",
+            session=self.session,
+            moment=m,
         )
         return self._expense_response(m, updated)
 
@@ -449,6 +454,8 @@ class TripDeepService:
             moment_id,
             moment_type=m.moment_type or "SHARED_EXPERIENCE",
             reason="expense:delete",
+            session=self.session,
+            moment=m,
         )
         return {"status": "deleted", "expense_id": expense_id}
 
@@ -737,6 +744,8 @@ class TripDeepService:
             moment_id,
             moment_type=m.moment_type or "SHARED_EXPERIENCE",
             reason="booking:create",
+            session=self.session,
+            moment=m,
         )
         return d.BookingResponse(
             id=row["id"],
@@ -793,6 +802,8 @@ class TripDeepService:
             moment_id,
             moment_type=m.moment_type or "SHARED_EXPERIENCE",
             reason="repair:inflated_booking_amounts",
+            session=self.session,
+            moment=m,
         )
         return {
             "moment_id": str(m.id),
