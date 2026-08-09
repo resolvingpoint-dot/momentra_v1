@@ -15,6 +15,7 @@ from app.core.request_context import (
     set_projection_version,
 )
 from app.domains.group.projection_cache import (
+    enqueue_group_projection_refresh,
     get_cached_envelope,
     set_cached_slice,
     template_key,
@@ -75,25 +76,36 @@ async def cached_or_build(
         return envelope.payload
 
     if envelope is not None and envelope.stale:
-        # Rebuild synchronously. Background Celery refresh is best-effort and often
-        # unavailable locally; returning stale forever left pulse KPIs stuck at 0
-        # after Quick Add / expense writes.
-        record_cache_miss()
+        # Stale is still a cache hit: keep the request path cheap and let the
+        # worker converge the projection. Invalidation also enqueues a refresh,
+        # but enqueue here as a self-healing fallback if that delivery failed.
+        record_cache_hit()
+        set_cache_hit(True)
+        set_build_coalesced(True)
+        set_projection_version(envelope.version)
+        try:
+            enqueue_group_projection_refresh(
+                user_id,
+                moment_id,
+                moment_type=moment_type,
+                reason="stale_serve",
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "GroupLoad stale enqueue failed user=%s template=%s slice=%s",
+                user_id,
+                template,
+                slice_type,
+                exc_info=True,
+            )
         logger.debug(
-            "GroupLoad template=%s moment=%s tab=%s source=stale-rebuild durationMs=%.1f",
+            "GroupLoad template=%s moment=%s tab=%s source=stale durationMs=%.1f",
             moment_type,
             moment_id,
             slice_type,
             (time.perf_counter() - t0) * 1000,
         )
-        return await _get_or_build(
-            user_id,
-            moment_id,
-            slice_type,
-            build_fn,
-            moment_type=moment_type,
-            template=template,
-        )
+        return envelope.payload
 
     record_cache_miss()
     return await _get_or_build(

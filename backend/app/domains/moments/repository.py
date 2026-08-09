@@ -136,6 +136,9 @@ class MomentRepository:
         Membership is resolved from:
         - ``group_moment_members`` (when a relational roster row exists), and/or
         - moment runtime store ``members`` (JWT invite accept path for shared moments).
+
+        Cost is O(user inventory): roster moment IDs are batch-loaded; runtime-only
+        members use a narrowed description contains query (never full GROUP scan).
         """
         from app.domains.group import moment_store as store
         from app.domains.group.models import GroupMomentMembers
@@ -154,22 +157,36 @@ class MomentRepository:
         except Exception:
             roster_rows = []
 
-        for row in roster_rows:
-            mid = row.moment_id
-            if mid in by_id:
-                continue
-            status_val = (row.status or "").upper()
-            if row.left_at is not None or status_val in _blocked:
-                continue
-            moment = await self.get_by_id(mid)
-            if moment is None:
-                continue
-            if (moment.context_type or "").upper() != "GROUP":
-                continue
-            by_id[moment.id] = moment
+        roster_ids = {
+            row.moment_id
+            for row in roster_rows
+            if row.moment_id not in by_id
+            and row.left_at is None
+            and (row.status or "").upper() not in _blocked
+        }
+        if roster_ids:
+            result = await self.session.execute(
+                select(MomentModel).where(
+                    MomentModel.id.in_(roster_ids),
+                    MomentModel.context_type == "GROUP",
+                )
+            )
+            for moment in result.scalars().all():
+                by_id[moment.id] = moment
 
+        # Compatibility path for legacy invite accepts that predate relational
+        # roster rows. Filter candidates in SQL by the exact serialized user_id
+        # token, then parse/verify them; never hydrate every GROUP moment.
         uid = str(user_id)
-        for moment in await self.list_by_context_type("GROUP"):
+        runtime_member_token = f'"user_id": "{uid}"'
+        legacy_stmt = select(MomentModel).where(
+            MomentModel.context_type == "GROUP",
+            MomentModel.description.contains(runtime_member_token),
+        )
+        if by_id:
+            legacy_stmt = legacy_stmt.where(MomentModel.id.notin_(tuple(by_id)))
+        result = await self.session.execute(legacy_stmt)
+        for moment in result.scalars().all():
             if moment.id in by_id:
                 continue
             for member in store.list_accepted_members(moment):

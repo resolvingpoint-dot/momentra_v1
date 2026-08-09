@@ -159,6 +159,8 @@ export function PersonalDashboard() {
   const [txMerchantFilter, setTxMerchantFilter] = useState("");
   const [breakdown, setBreakdown] = useState<SpendBreakdown | null>(null);
   const [budgetCycleId, setBudgetCycleId] = useState("");
+  const budgetCycleIdRef = useRef(budgetCycleId);
+  budgetCycleIdRef.current = budgetCycleId;
   const [budgets, setBudgets] = useState<PersonalBudget[]>([]);
   const [budgetCategoryId, setBudgetCategoryId] = useState("");
   const [budgetSubcategoryId, setBudgetSubcategoryId] = useState("");
@@ -268,7 +270,7 @@ export function PersonalDashboard() {
     let budgetsResult: PersonalBudget[] = [];
     let summaryResult: PersonalSummary | null = null;
     try {
-      const [s, g, m, c, t, breakdownResult, categoriesResult, budgetsSettled] = await Promise.all([
+      const [s, g, m, c, t, breakdownResult, categoriesResult] = await Promise.all([
         fetchPersonalSummary(token),
         fetchGoals(token),
         fetchMoments(token),
@@ -285,9 +287,6 @@ export function PersonalDashboard() {
           cycle_id: txCycleFilter || undefined,
         }).catch(() => null),
         fetchTransactionCategories(token).catch(() => [] as Awaited<ReturnType<typeof fetchTransactionCategories>>),
-        budgetCycleId
-          ? fetchBudgets(token, budgetCycleId).catch(() => [] as PersonalBudget[])
-          : Promise.resolve([] as PersonalBudget[]),
       ]);
       summaryResult = s;
       setSummary(s);
@@ -297,13 +296,20 @@ export function PersonalDashboard() {
       setTransactions(t);
       setBreakdown(breakdownResult);
       setTxnCategories(categoriesResult);
-      budgetsResult = budgetsSettled;
-      setBudgets(budgetsSettled);
+
+      // Budgets: use current cycle (ref) or first cycle — do not put budgetCycleId in
+      // refresh deps (that caused a second full fan-out when the cycle seeded).
+      const cycleForBudgets = budgetCycleIdRef.current || c[0]?.cycle_id || "";
+      if (cycleForBudgets) {
+        setBudgetCycleId((prev) => prev || cycleForBudgets);
+        budgetsResult = await fetchBudgets(token, cycleForBudgets).catch(() => [] as PersonalBudget[]);
+        setBudgets(budgetsResult);
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load");
     }
     return { summary: summaryResult, budgets: budgetsResult };
-  }, [user, txMonth, txCycleFilter, txCategoryFilter, txMerchantFilter, budgetCycleId]);
+  }, [user, txMonth, txCycleFilter, txCategoryFilter, txMerchantFilter]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -311,6 +317,23 @@ export function PersonalDashboard() {
       logAnalyticsEvent("personal_dashboard_view");
     }
   }, [authLoading, user, refresh]);
+
+  useEffect(() => {
+    if (!user || !budgetCycleId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        const b = await fetchBudgets(token, budgetCycleId).catch(() => [] as PersonalBudget[]);
+        if (!cancelled) setBudgets(b);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, budgetCycleId]);
 
   useEffect(() => {
     if (!budgetCycleId && cycles.length > 0) {

@@ -166,7 +166,16 @@ function useGroupTabCache<T>(
     void load(false);
   }, [enabled, id, load, generation, tab]);
 
-  return { data, loading, refreshing, error, reload: () => load(true) };
+  return {
+    data,
+    loading,
+    refreshing,
+    error,
+    /** Pull-to-refresh / explicit retry — bypasses client+server cache. */
+    reload: () => load(true),
+    /** SSE / mutation invalidate — soft SWR revalidate (no force_refresh). */
+    revalidate: () => load(false),
+  };
 }
 
 export function useGroupPulse(momentId: string | null | undefined, enabled = true) {
@@ -333,7 +342,14 @@ export function useGroupLife(enabled = true) {
     void load(false);
   }, [enabled, load, generation]);
 
-  return { data, loading, refreshing, error, reload: () => load(true) };
+  return {
+    data,
+    loading,
+    refreshing,
+    error,
+    reload: () => load(true),
+    revalidate: () => load(false),
+  };
 }
 
 export async function fetchGroupSessionBootstrapDeduped(): Promise<SessionBootstrapResponse> {
@@ -371,7 +387,8 @@ export function invalidateGroupTabCaches(momentId?: string) {
 
 /**
  * Subscribe to trip moment SSE invalidate events.
- * Clears pulse/moments/memory caches for the id; optional callback bumps reloadKey.
+ * Clears pulse/moments/memory caches for the id; optional callback should soft-revalidate
+ * (bump reloadKey → load(false)), not force_refresh.
  */
 export function useTripMomentStream(
   momentId: string | null | undefined,

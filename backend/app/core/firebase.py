@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import time
 from typing import Any
 
 import base64
@@ -14,6 +16,9 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _firebase_app: firebase_admin.App | None = None
+_VERIFIED_TOKEN_TTL_SEC = 60.0
+_VERIFIED_TOKEN_CACHE_MAX = 2048
+_verified_token_cache: dict[str, tuple[dict[str, Any], float]] = {}
 
 
 def init_firebase() -> None:
@@ -60,7 +65,20 @@ def init_firebase() -> None:
 def verify_firebase_token(token: str) -> dict[str, Any]:
     if _firebase_app is None:
         raise RuntimeError("Firebase not initialized")
+    cache_key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = time.monotonic()
+    cached = _verified_token_cache.get(cache_key)
+    if cached is not None and cached[1] > now:
+        return cached[0].copy()
+
     decoded = auth.verify_id_token(token, app=_firebase_app)
+    if len(_verified_token_cache) >= _VERIFIED_TOKEN_CACHE_MAX:
+        expired = [key for key, (_, expires_at) in _verified_token_cache.items() if expires_at <= now]
+        for key in expired:
+            _verified_token_cache.pop(key, None)
+        if len(_verified_token_cache) >= _VERIFIED_TOKEN_CACHE_MAX:
+            _verified_token_cache.pop(next(iter(_verified_token_cache)))
+    _verified_token_cache[cache_key] = (decoded.copy(), now + _VERIFIED_TOKEN_TTL_SEC)
     return decoded
 
 

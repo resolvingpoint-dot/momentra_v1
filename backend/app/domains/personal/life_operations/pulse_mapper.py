@@ -1,6 +1,7 @@
 """Build Life Operations pulse block from personal snapshot tables."""
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -60,18 +61,21 @@ async def _count_rows(session: AsyncSession, stmt) -> int:
 
 async def _signal_event_count(session: AsyncSession, moment_id: UUID) -> int:
     """Count wellbeing/signal events that drive Life Ops health scores."""
-    totals = 0
-    for model in (
-        PersonalLifeAttentionEvents,
-        PersonalLifeRecoveryEvents,
-        PersonalLifeMoodEvents,
-        PersonalLifeAdjustEvents,
-    ):
-        totals += await _count_rows(
-            session,
-            select(func.count()).select_from(model).where(model.moment_id == moment_id),
+    counts = await asyncio.gather(
+        *(
+            _count_rows(
+                session,
+                select(func.count()).select_from(model).where(model.moment_id == moment_id),
+            )
+            for model in (
+                PersonalLifeAttentionEvents,
+                PersonalLifeRecoveryEvents,
+                PersonalLifeMoodEvents,
+                PersonalLifeAdjustEvents,
+            )
         )
-    return totals
+    )
+    return int(sum(counts))
 
 
 def _month_bounds(today: date | None = None) -> tuple[date, date]:
@@ -90,7 +94,9 @@ async def build_life_operations_pulse(
     moment_id: UUID,
     moment_name: str,
 ) -> dict[str, Any] | None:
-    runtime_result = await session.execute(
+    month_start, month_end = _month_bounds()
+
+    runtime_coro = session.execute(
         select(PersonalRuntimeSnapshots)
         .where(
             PersonalRuntimeSnapshots.moment_id == moment_id,
@@ -99,9 +105,7 @@ async def build_life_operations_pulse(
         .order_by(PersonalRuntimeSnapshots.snapshot_date.desc())
         .limit(1)
     )
-    runtime = runtime_result.scalar_one_or_none()
-
-    metrics_result = await session.execute(
+    metrics_coro = session.execute(
         select(PersonalMetricSnapshots)
         .where(
             PersonalMetricSnapshots.moment_id == moment_id,
@@ -110,9 +114,7 @@ async def build_life_operations_pulse(
         .order_by(PersonalMetricSnapshots.snapshot_date.desc())
         .limit(10)
     )
-    metrics = list(metrics_result.scalars().all())
-
-    timeline_result = await session.execute(
+    timeline_coro = session.execute(
         select(PersonalActivityTimeline)
         .where(
             PersonalActivityTimeline.moment_id == moment_id,
@@ -121,10 +123,7 @@ async def build_life_operations_pulse(
         .order_by(PersonalActivityTimeline.event_occurred_at.desc())
         .limit(8)
     )
-    timeline = list(timeline_result.scalars().all())
-
-    month_start, month_end = _month_bounds()
-    month_money_result = await session.execute(
+    month_money_coro = session.execute(
         select(PersonalMoneyEvents).where(
             PersonalMoneyEvents.moment_id == moment_id,
             PersonalMoneyEvents.is_voided.is_(False),
@@ -132,10 +131,7 @@ async def build_life_operations_pulse(
             PersonalMoneyEvents.event_date < month_end,
         )
     )
-    month_money = list(month_money_result.scalars().all())
-
-    # Recent money for activity enrichment (timeline quick-add join) — capped.
-    money_result = await session.execute(
+    money_coro = session.execute(
         select(PersonalMoneyEvents)
         .where(
             PersonalMoneyEvents.moment_id == moment_id,
@@ -144,11 +140,30 @@ async def build_life_operations_pulse(
         .order_by(PersonalMoneyEvents.event_date.desc())
         .limit(40)
     )
+
+    (
+        runtime_result,
+        metrics_result,
+        timeline_result,
+        month_money_result,
+        money_result,
+        signal_count,
+    ) = await asyncio.gather(
+        runtime_coro,
+        metrics_coro,
+        timeline_coro,
+        month_money_coro,
+        money_coro,
+        _signal_event_count(session, moment_id),
+    )
+
+    runtime = runtime_result.scalar_one_or_none()
+    metrics = list(metrics_result.scalars().all())
+    timeline = list(timeline_result.scalars().all())
+    month_money = list(month_money_result.scalars().all())
     money_events = list(money_result.scalars().all())
     money_by_qa = money_events_by_quick_add(money_events)
     catalog = get_reference_catalog()
-
-    signal_count = await _signal_event_count(session, moment_id)
     data_sufficient = signal_count > 0
 
     if data_sufficient:

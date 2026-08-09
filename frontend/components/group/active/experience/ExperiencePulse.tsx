@@ -167,6 +167,13 @@ export function ExperiencePulse({
       : isLiving
         ? livingHook.reload
         : activeHook.reload;
+  const revalidate = isTrip
+    ? tripHook.revalidate
+    : isPurchase
+      ? purchaseHook.revalidate
+      : isLiving
+        ? livingHook.revalidate
+        : activeHook.revalidate;
   const tripData = tripHook.data;
   const purchaseData = purchaseHook.data;
   const livingData = livingHook.data;
@@ -177,8 +184,8 @@ export function ExperiencePulse({
   const momentTypeCode = templateToMomentType(template);
 
   useEffect(() => {
-    if (reloadKey > 0) void reload();
-  }, [reloadKey, reload]);
+    if (reloadKey > 0) void revalidate();
+  }, [reloadKey, revalidate]);
 
   if (loading && !data && !tripData && !purchaseData && !livingData) {
     return (

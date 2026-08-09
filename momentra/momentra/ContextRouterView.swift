@@ -1107,24 +1107,41 @@ private final class HomeViewModel: ObservableObject {
             isLoading = false
             return
         }
-        isLoading = true
+        let hadContent: Bool = {
+            switch selectedContext {
+            case .personal: return !personalItems.isEmpty
+            case .group: return !groupItems.isEmpty || !groupPendingInvites.isEmpty
+            case .business: return !businessItems.isEmpty || !businessPendingInvites.isEmpty
+            case .circle: return false
+            }
+        }()
+        // Soft paint: keep last list visible while refreshing.
+        if !hadContent {
+            isLoading = true
+        }
         errorMessage = nil
         do {
             switch selectedContext {
             case .personal:
-                let home: PersonalHomeOut = try await NetworkService.shared.request(endpoint: "/personal/home", token: token)
-                let moments: PersonalMomentListResponse = try await NetworkService.shared.request(endpoint: "/personal/moments", token: token)
+                async let homeReq: PersonalHomeOut = NetworkService.shared.request(endpoint: "/personal/home", token: token)
+                async let momentsReq: PersonalMomentListResponse = NetworkService.shared.request(endpoint: "/personal/moments", token: token)
+                let home = try await homeReq
+                let moments = try await momentsReq
                 personalNetBalance = home.netBalance
                 personalItems = moments.moments.map { toHomeListItem($0) }
             case .group:
-                let group: GroupMomentListOut = try await NetworkService.shared.request(endpoint: "/group/moments", token: token)
+                async let groupReq: GroupMomentListOut = NetworkService.shared.request(endpoint: "/group/moments", token: token)
+                async let pendingReq = NetworkService.shared.groupPendingInvites(token: token)
+                let group = try await groupReq
+                let pending = try await pendingReq
                 groupItems = group.moments.map { toHomeListItem($0) }
-                let pending = try await NetworkService.shared.groupPendingInvites(token: token)
                 groupPendingInvites = pending.invites
             case .business:
-                let business: BusinessBudgetListOut = try await NetworkService.shared.request(endpoint: "/business/moments", token: token)
+                async let businessReq: BusinessBudgetListOut = NetworkService.shared.request(endpoint: "/business/moments", token: token)
+                async let pendingReq = NetworkService.shared.businessPendingInvites(token: token)
+                let business = try await businessReq
+                let pending = try await pendingReq
                 businessItems = business.budgets.map { toHomeListItem($0) }
-                let pending = try await NetworkService.shared.businessPendingInvites(token: token)
                 businessPendingInvites = pending.invites
             case .circle:
                 break

@@ -52,12 +52,17 @@ export function ActiveMemory({
   const loading = isPurchase ? purchaseHook.loading : isLiving ? livingHook.loading : tripHook.loading;
   const error = isPurchase ? purchaseHook.error : isLiving ? livingHook.error : tripHook.error;
   const reload = isPurchase ? purchaseHook.reload : isLiving ? livingHook.reload : tripHook.reload;
+  const revalidate = isPurchase
+    ? purchaseHook.revalidate
+    : isLiving
+      ? livingHook.revalidate
+      : tripHook.revalidate;
   const [showExtras, setShowExtras] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (reloadKey > 0) void reload();
-  }, [reloadKey, reload]);
+    if (reloadKey > 0) void revalidate();
+  }, [reloadKey, revalidate]);
 
   async function handleDeleteMemory(memoryId: string) {
     if (!memoryId) return;

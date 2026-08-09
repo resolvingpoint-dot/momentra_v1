@@ -186,13 +186,14 @@ export function GroupDetailLayout({ groupId }: { groupId: string }) {
     const token = await user.getIdToken();
     setErr(null);
     try {
-      const [d, c, e, a, rec, pos] = await Promise.all([
+      const [d, c, e, a, rec, pos, plan] = await Promise.all([
         fetchGroupDetail(token, groupId),
         fetchGroupCommitments(token, groupId),
         fetchGroupExpenses(token, groupId),
         fetchGroupActivity(token, groupId),
         fetchGroupRecurringExpenses(token, groupId),
         fetchGroupPositions(token, groupId),
+        fetchGroupSettlementPlan(token, groupId, { cycleId: null }).catch(() => null),
       ]);
       setDetail(d);
       setCommitments(c);
@@ -200,14 +201,7 @@ export function GroupDetailLayout({ groupId }: { groupId: string }) {
       setActivity(a);
       setRecurring(rec);
       setPositions(pos);
-      try {
-        const plan = await fetchGroupSettlementPlan(token, groupId, {
-          cycleId: d.active_cycle?.cycle_id ?? null,
-        });
-        setSettlementPlan(plan);
-      } catch {
-        setSettlementPlan(null);
-      }
+      setSettlementPlan(plan);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     }

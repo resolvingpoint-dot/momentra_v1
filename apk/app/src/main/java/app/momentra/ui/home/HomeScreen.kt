@@ -108,6 +108,8 @@ import app.momentra.network.BusinessPendingInviteOut
 import app.momentra.network.GroupPendingInviteOut
 import java.io.File
 import java.util.Calendar
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -504,45 +506,61 @@ fun HomeScreen(
     }
 
     suspend fun refreshPersonalMoments() {
-        val home = authRepository.personalHome()
-        val moments = authRepository.personalMoments()
-        if (home.isFailure || moments.isFailure) {
+        coroutineScope {
+            val homeD = async { authRepository.personalHome() }
+            val momentsD = async { authRepository.personalMoments() }
+            val home = homeD.await()
+            val moments = momentsD.await()
+            if (home.isFailure || moments.isFailure) {
+                dataState = dataState.copy(
+                    personalNetBalance = home.getOrNull()?.netBalance ?: dataState.personalNetBalance,
+                    personalItems = moments.getOrNull()?.moments.orEmpty().map { mapPersonalMoment(it) },
+                    error = home.exceptionOrNull()?.message ?: moments.exceptionOrNull()?.message,
+                )
+                return@coroutineScope
+            }
             dataState = dataState.copy(
-                personalNetBalance = home.getOrNull()?.netBalance ?: dataState.personalNetBalance,
+                error = null,
+                personalNetBalance = home.getOrNull()?.netBalance,
                 personalItems = moments.getOrNull()?.moments.orEmpty().map { mapPersonalMoment(it) },
-                error = home.exceptionOrNull()?.message ?: moments.exceptionOrNull()?.message,
             )
-            return
         }
-        dataState = dataState.copy(
-            error = null,
-            personalNetBalance = home.getOrNull()?.netBalance,
-            personalItems = moments.getOrNull()?.moments.orEmpty().map { mapPersonalMoment(it) },
-        )
     }
 
     suspend fun refreshGroupMoments() {
-        val groups = authRepository.groupMoments()
-        if (groups.isFailure) {
-            dataState = dataState.copy(error = groups.exceptionOrNull()?.message)
-            return
+        coroutineScope {
+            val groupsD = async { authRepository.groupMoments() }
+            val pendingD = async { authRepository.groupPendingInvites() }
+            val groups = groupsD.await()
+            val pending = pendingD.await()
+            if (groups.isFailure) {
+                dataState = dataState.copy(error = groups.exceptionOrNull()?.message)
+                return@coroutineScope
+            }
+            groupPendingInvites = pending.getOrNull()?.invites.orEmpty()
+            dataState = dataState.copy(
+                error = null,
+                groupItems = groups.getOrNull()?.moments.orEmpty().map { mapGroupMoment(it) },
+            )
         }
-        dataState = dataState.copy(
-            error = null,
-            groupItems = groups.getOrNull()?.moments.orEmpty().map { mapGroupMoment(it) },
-        )
     }
 
     suspend fun refreshBusinessMoments() {
-        val business = authRepository.businessMoments()
-        if (business.isFailure) {
-            dataState = dataState.copy(error = business.exceptionOrNull()?.message)
-            return
+        coroutineScope {
+            val businessD = async { authRepository.businessMoments() }
+            val pendingD = async { authRepository.businessPendingInvites() }
+            val business = businessD.await()
+            val pending = pendingD.await()
+            if (business.isFailure) {
+                dataState = dataState.copy(error = business.exceptionOrNull()?.message)
+                return@coroutineScope
+            }
+            businessPendingInvites = pending.getOrNull()?.invites.orEmpty()
+            dataState = dataState.copy(
+                error = null,
+                businessItems = business.getOrNull()?.budgets.orEmpty().map { mapBusinessMoment(it) },
+            )
         }
-        dataState = dataState.copy(
-            error = null,
-            businessItems = business.getOrNull()?.budgets.orEmpty().map { mapBusinessMoment(it) },
-        )
     }
 
     suspend fun refreshBusinessCatalog(budgetId: String) {
@@ -583,44 +601,71 @@ fun HomeScreen(
     }
 
     suspend fun reloadMoments() {
-        dataState = dataState.copy(loading = true, error = null)
+        val hadContent = when (selectedContext) {
+            MomentraContext.Personal -> dataState.personalItems.isNotEmpty()
+            MomentraContext.Group -> dataState.groupItems.isNotEmpty()
+            MomentraContext.Business -> dataState.businessItems.isNotEmpty()
+            MomentraContext.Circle -> false
+        }
+        // Soft paint: keep last list visible while refreshing.
+        if (!hadContent) {
+            dataState = dataState.copy(loading = true, error = null)
+        } else {
+            dataState = dataState.copy(error = null)
+        }
         dataState = when (selectedContext) {
             MomentraContext.Personal -> {
-                val home = authRepository.personalHome()
-                val moments = authRepository.personalMoments()
-                if (home.isFailure || moments.isFailure) {
-                    dataState.copy(
-                        loading = false,
-                        error = home.exceptionOrNull()?.message ?: moments.exceptionOrNull()?.message,
-                    )
-                } else {
-                    dataState.copy(
-                        loading = false,
-                        personalNetBalance = home.getOrNull()?.netBalance,
-                        personalItems = moments.getOrNull()?.moments.orEmpty().map { mapPersonalMoment(it) },
-                    )
+                coroutineScope {
+                    val homeD = async { authRepository.personalHome() }
+                    val momentsD = async { authRepository.personalMoments() }
+                    val home = homeD.await()
+                    val moments = momentsD.await()
+                    if (home.isFailure || moments.isFailure) {
+                        dataState.copy(
+                            loading = false,
+                            error = home.exceptionOrNull()?.message ?: moments.exceptionOrNull()?.message,
+                        )
+                    } else {
+                        dataState.copy(
+                            loading = false,
+                            personalNetBalance = home.getOrNull()?.netBalance,
+                            personalItems = moments.getOrNull()?.moments.orEmpty().map { mapPersonalMoment(it) },
+                        )
+                    }
                 }
             }
             MomentraContext.Group -> {
-                val groups = authRepository.groupMoments()
-                if (groups.isFailure) {
-                    dataState.copy(loading = false, error = groups.exceptionOrNull()?.message)
-                } else {
-                    dataState.copy(
-                        loading = false,
-                        groupItems = groups.getOrNull()?.moments.orEmpty().map { mapGroupMoment(it) },
-                    )
+                coroutineScope {
+                    val groupsD = async { authRepository.groupMoments() }
+                    val pendingD = async { authRepository.groupPendingInvites() }
+                    val groups = groupsD.await()
+                    val pending = pendingD.await()
+                    groupPendingInvites = pending.getOrNull()?.invites.orEmpty()
+                    if (groups.isFailure) {
+                        dataState.copy(loading = false, error = groups.exceptionOrNull()?.message)
+                    } else {
+                        dataState.copy(
+                            loading = false,
+                            groupItems = groups.getOrNull()?.moments.orEmpty().map { mapGroupMoment(it) },
+                        )
+                    }
                 }
             }
             MomentraContext.Business -> {
-                val business = authRepository.businessMoments()
-                if (business.isFailure) {
-                    dataState.copy(loading = false, error = business.exceptionOrNull()?.message)
-                } else {
-                    dataState.copy(
-                        loading = false,
-                        businessItems = business.getOrNull()?.budgets.orEmpty().map { mapBusinessMoment(it) },
-                    )
+                coroutineScope {
+                    val businessD = async { authRepository.businessMoments() }
+                    val pendingD = async { authRepository.businessPendingInvites() }
+                    val business = businessD.await()
+                    val pending = pendingD.await()
+                    businessPendingInvites = pending.getOrNull()?.invites.orEmpty()
+                    if (business.isFailure) {
+                        dataState.copy(loading = false, error = business.exceptionOrNull()?.message)
+                    } else {
+                        dataState.copy(
+                            loading = false,
+                            businessItems = business.getOrNull()?.budgets.orEmpty().map { mapBusinessMoment(it) },
+                        )
+                    }
                 }
             }
             MomentraContext.Circle -> dataState.copy(loading = false, error = null)

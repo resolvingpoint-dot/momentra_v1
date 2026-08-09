@@ -65,7 +65,7 @@ fun PurchasePulseScreen(
     }
 
     LaunchedEffect(reloadKey) {
-        if (reloadKey > 0 && !momentId.isNullOrBlank()) viewModel.load(momentId, force = true)
+        if (reloadKey > 0 && !momentId.isNullOrBlank()) viewModel.load(momentId, force = false)
     }
 
     Box(
