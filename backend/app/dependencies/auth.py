@@ -41,38 +41,37 @@ async def get_current_user(
             detail="Token is empty",
         )
 
-    # Try Firebase ID token first
+    # Prefer session JWT first (cheap HMAC). Firebase verify is expensive and
+    # was previously attempted on every request even when clients send session tokens.
+    try:
+        decoded = decode_session_token(token)
+        if decoded.get("type") == "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token cannot be used for authentication",
+            )
+        uid = decoded["sub"]
+        request.state.user_uid = uid
+        return {
+            "type": "session",
+            "uid": uid,
+            "payload": decoded,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
     try:
         decoded = verify_firebase_token(token)
         uid = decoded["uid"]
         request.state.user_uid = uid
         return {"type": "firebase", "uid": uid, "payload": decoded}
-    except Exception:
-        pass
-
-    # Fallback to session token
-    try:
-        decoded = decode_session_token(token)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         ) from exc
-
-    # Refresh tokens are only valid at POST /auth/refresh, never as bearer auth.
-    if decoded.get("type") == "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token cannot be used for authentication",
-        )
-
-    uid = decoded["sub"]
-    request.state.user_uid = uid
-    return {
-        "type": "session",
-        "uid": uid,
-        "payload": decoded,
-    }
 
 
 async def get_current_user_id(

@@ -187,24 +187,26 @@ class ProjectionReadService:
         active_count: int,
         force_refresh: bool = False,
     ) -> dict[str, Any]:
-        blocks: dict[str, dict[str, Any] | None] = {}
-        for code in active_templates:
-            registry = get_template_projection_registry()
-            if not registry.is_registered(code):
-                continue
+        registry = get_template_projection_registry()
+        codes = [
+            code
+            for code in active_templates
+            if registry.is_registered(code) and hasattr(registry.resolve(code), "pulse")
+        ]
+
+        async def _one(code: str) -> tuple[str, dict[str, Any] | None]:
             try:
-                handler = registry.resolve(code)
-                if not hasattr(handler, "pulse"):
-                    continue
                 slice_payload = await self.get_slice(
                     user_id, code, "pulse", force_refresh=force_refresh
                 )
-                blocks[code] = extract_aggregate_pulse_block(code, slice_payload)
+                return code, extract_aggregate_pulse_block(code, slice_payload)
             except Exception:
                 logger.exception("Failed to read pulse slice for %s", code)
-                blocks[code] = None
-        composed = compose_aggregate_pulse(blocks, active_count=active_count)
-        return composed
+                return code, None
+
+        results = await asyncio.gather(*(_one(code) for code in codes))
+        blocks: dict[str, dict[str, Any] | None] = {code: block for code, block in results}
+        return compose_aggregate_pulse(blocks, active_count=active_count)
 
     async def get_personal_life(
         self, user_id: UUID, *, force_refresh: bool = False

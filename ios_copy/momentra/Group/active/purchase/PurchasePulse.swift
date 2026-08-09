@@ -28,7 +28,7 @@ struct PurchasePulse: View {
         .refreshable { await loadPulse(force: true) }
         .task(id: resolvedMomentId) { await loadPulse(force: false) }
         .onChange(of: reloadKey) { _, _ in
-            Task { await loadPulse(force: true) }
+            Task { await loadPulse(force: false) }
         }
         .animation(.easeOut(duration: 0.35), value: pulse?.momentId)
     }

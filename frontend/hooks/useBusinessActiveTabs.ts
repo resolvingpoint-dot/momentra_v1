@@ -280,7 +280,9 @@ function useAbortableTabCache<T>(
 
   useEffect(() => {
     if (!enabled || !cacheId) return;
-    void load(reloadKey > 0);
+    // reloadKey bump = soft SWR revalidate (caches cleared by invalidate paths).
+    // Never treat sticky reloadKey > 0 as permanent force_refresh.
+    void load(false);
   }, [enabled, cacheId, load, reloadKey]);
 
   return {

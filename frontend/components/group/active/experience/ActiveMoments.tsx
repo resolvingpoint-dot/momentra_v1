@@ -77,12 +77,17 @@ export function ActiveMoments({
   const loading = isPurchase ? purchaseHook.loading : isLiving ? livingHook.loading : tripHook.loading;
   const error = isPurchase ? purchaseHook.error : isLiving ? livingHook.error : tripHook.error;
   const reload = isPurchase ? purchaseHook.reload : isLiving ? livingHook.reload : tripHook.reload;
+  const revalidate = isPurchase
+    ? purchaseHook.revalidate
+    : isLiving
+      ? livingHook.revalidate
+      : tripHook.revalidate;
 
   useEffect(() => {
     if (reloadKey > 0) {
-      void reload();
+      void revalidate();
     }
-  }, [reloadKey, reload]);
+  }, [reloadKey, revalidate]);
 
   if (loading && !moments) {
     return (
