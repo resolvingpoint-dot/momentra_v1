@@ -314,6 +314,7 @@ def dashboard_recent_items(ctx: SharedLivingContext) -> list[dict]:
                 "occurred_at": str(a.get("occurred_at") or ""),
                 "relative_time": relative_time_label(a.get("occurred_at")),
                 "icon": str(a.get("icon") or "home"),
+                "can_edit": bool(a.get("can_edit", True)),
             }
         )
     return items

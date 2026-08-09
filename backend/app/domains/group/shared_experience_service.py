@@ -213,6 +213,8 @@ class SharedExperienceService:
             moment_id,
             moment_type=moment.moment_type or MOMENT_TYPE,
             reason="activity:patch_mirror",
+            session=self.session,
+            moment=moment,
         )
         return self.serialize_activity(updated)
 
@@ -263,4 +265,6 @@ class SharedExperienceService:
             moment_id,
             moment_type=moment.moment_type or MOMENT_TYPE,
             reason=reason,
+            session=self.session,
+            moment=moment,
         )

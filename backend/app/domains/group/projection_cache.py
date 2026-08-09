@@ -2,10 +2,16 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.domains.moment_engine.handlers.base import enqueue_celery
 from app.domains.projections import projection_cache
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.domains.moments.models import MomentModel
 
 logger = logging.getLogger(__name__)
 
@@ -88,20 +94,79 @@ def enqueue_group_projection_refresh(
     enqueue_celery(refresh_group_projections, str(user_id), template, reason)
 
 
+async def _mark_user_stale_and_enqueue(
+    member_id: UUID,
+    moment_id: UUID,
+    *,
+    moment_type: str,
+    reason: str,
+    template: str,
+) -> None:
+    for slice_type in SLICES:
+        try:
+            await projection_cache.mark_stale(member_id, template, slice_type)
+        except Exception:
+            logger.warning(
+                "GroupLoad mark_stale failed user=%s template=%s slice=%s",
+                member_id,
+                template,
+                slice_type,
+                exc_info=True,
+            )
+    try:
+        enqueue_group_projection_refresh(
+            member_id, moment_id, moment_type=moment_type, reason=reason
+        )
+    except Exception:
+        logger.warning(
+            "GroupLoad enqueue refresh failed user=%s template=%s reason=%s",
+            member_id,
+            template,
+            reason,
+            exc_info=True,
+        )
+
+
 async def invalidate_group_projections(
     user_id: UUID,
     moment_id: UUID,
     *,
     moment_type: str = "SHARED_EXPERIENCE",
     reason: str = "group_activity",
+    session: AsyncSession | None = None,
+    moment: MomentModel | None = None,
 ) -> None:
-    """Mark slices stale and enqueue background rebuild — never hard-delete only."""
+    """Mark slices stale for all members and enqueue rebuilds — never hard-delete only.
+
+    When ``session`` is provided, fan-out to every accepted member (runtime ∪
+    relational roster). Always includes the actor. Publishes moment-scoped
+    Redis invalidate once so SSE clients refresh.
+    """
     template = template_key(moment_type, moment_id)
-    for slice_type in SLICES:
-        await projection_cache.mark_stale(user_id, template, slice_type)
-    enqueue_group_projection_refresh(
-        user_id, moment_id, moment_type=moment_type, reason=reason
-    )
+    member_ids: set[UUID] = {user_id}
+    if session is not None:
+        try:
+            from app.domains.group.access import list_group_member_user_ids
+
+            member_ids |= await list_group_member_user_ids(
+                session, moment_id, moment=moment
+            )
+        except Exception:
+            logger.warning(
+                "GroupLoad member fan-out resolve failed moment=%s; actor-only",
+                moment_id,
+                exc_info=True,
+            )
+
+    for member_id in member_ids:
+        await _mark_user_stale_and_enqueue(
+            member_id,
+            moment_id,
+            moment_type=moment_type,
+            reason=reason,
+            template=template,
+        )
+
     try:
         from app.domains.group.group_moment_events import publish_group_moment_invalidate
 
@@ -114,8 +179,8 @@ async def invalidate_group_projections(
             exc_info=True,
         )
     logger.debug(
-        "GroupLoad invalidate user=%s template=%s reason=%s",
-        user_id,
+        "GroupLoad invalidate users=%s template=%s reason=%s",
+        len(member_ids),
         template,
         reason,
     )
@@ -127,10 +192,14 @@ async def invalidate_for_moment(
     moment_type: str | None,
     *,
     reason: str = "manual",
+    session: AsyncSession | None = None,
+    moment: MomentModel | None = None,
 ) -> None:
     await invalidate_group_projections(
         user_id,
         moment_id,
         moment_type=moment_type or "SHARED_EXPERIENCE",
         reason=reason,
+        session=session,
+        moment=moment,
     )

@@ -160,7 +160,12 @@ class SharedLivingService:
         self._mirror_patch_to_collection(moment, updated, allowed)
         await self.session.flush()
         await invalidate_group_projections(
-            user_id, moment_id, moment_type=MOMENT_TYPE, reason="activity:patch_mirror"
+            user_id,
+            moment_id,
+            moment_type=MOMENT_TYPE,
+            reason="activity:patch_mirror",
+            session=self.session,
+            moment=moment,
         )
         return self.serialize_activity(updated)
 
@@ -207,4 +212,12 @@ class SharedLivingService:
         store.write_state(moment, state)
 
     async def invalidate(self, user_id: UUID, moment_id: UUID, *, reason: str = "manual") -> None:
-        await invalidate_group_projections(user_id, moment_id, moment_type=MOMENT_TYPE, reason=reason)
+        moment = await self._require(user_id, moment_id)
+        await invalidate_group_projections(
+            user_id,
+            moment_id,
+            moment_type=MOMENT_TYPE,
+            reason=reason,
+            session=self.session,
+            moment=moment,
+        )

@@ -120,6 +120,8 @@ class SettlementService:
             moment.id,
             moment_type=moment.moment_type or "SHARED_EXPERIENCE",
             reason=reason,
+            session=self.session,
+            moment=moment,
         )
 
     def preview_for_moment(self, moment: MomentModel) -> SettlementPreview:

@@ -194,26 +194,22 @@ class PlatformInviteService:
             "qr_payload": url,
         }
 
-    async def create_group_invite(
+    async def mint_opaque_moment_invite(
         self,
         user_id: UUID,
-        moment_id: UUID,
+        moment,
         *,
         role_code: str = "PARTICIPANT",
         expires_in_days: int | None = None,
-        max_uses: int = 50,
+        max_uses: int = 1,
         metadata: dict | None = None,
     ) -> dict:
-        from app.domains.moments.repository import MomentRepository
-
-        moment = await MomentRepository(self.session).get_by_user_and_id(user_id, moment_id)
-        if moment is None:
-            raise HTTPException(status_code=404, detail="Moment not found")
-
+        """Mint an opaque invite for a moment already authorized by the caller."""
         code, code_hash, suffix = await self._mint_unique_code()
         now = _now()
         meta = dict(metadata or {})
         meta["legacy_or_opaque"] = "OPAQUE_CODE"
+        moment_id = moment.id
         row = PlatformInviteModel(
             id=uuid4(),
             code_hash=code_hash,
@@ -260,6 +256,30 @@ class PlatformInviteService:
             "moment_id": str(moment_id),
             "moment_type": moment.moment_type,
         }
+
+    async def create_group_invite(
+        self,
+        user_id: UUID,
+        moment_id: UUID,
+        *,
+        role_code: str = "PARTICIPANT",
+        expires_in_days: int | None = None,
+        max_uses: int = 1,
+        metadata: dict | None = None,
+    ) -> dict:
+        from app.domains.moments.repository import MomentRepository
+
+        moment = await MomentRepository(self.session).get_by_user_and_id(user_id, moment_id)
+        if moment is None:
+            raise HTTPException(status_code=404, detail="Moment not found")
+        return await self.mint_opaque_moment_invite(
+            user_id,
+            moment,
+            role_code=role_code,
+            expires_in_days=expires_in_days,
+            max_uses=max_uses,
+            metadata=metadata,
+        )
 
     async def list_workspace_invites(
         self, user_id: UUID, workspace_id: UUID
@@ -523,6 +543,13 @@ class PlatformInviteService:
         if moment is None:
             raise InviteOutcomeError("INVALID", "Moment not found", 404)
 
+        meta = dict(row.metadata_json or {})
+        is_business = bool(meta.get("business_moment")) or (
+            str(row.target_context or "").upper() == "BUSINESS"
+        )
+        if is_business:
+            return await self._accept_business_moment(user_id, row, moment)
+
         already = moment.user_id == user_id
         attached_id = None
         if not already:
@@ -552,16 +579,21 @@ class PlatformInviteService:
             raise InviteOutcomeError("EXHAUSTED", "Invite has no remaining uses", 400)
 
         invite_svc = InviteService(self.session)
+        from app.domains.group.member_names import resolve_user_display_name
+        from app.domains.group.projection_cache import invalidate_group_projections
+
+        profile_name = await resolve_user_display_name(self.session, user_id)
         attached_id = invite_svc._attach_accepter(  # noqa: SLF001
             moment,
             user_id,
             participant_id=None,
             email=None,
+            display_name=profile_name,
         )
         await invite_svc._upsert_group_roster_member(  # noqa: SLF001
             moment,
             user_id,
-            display_name="Member",
+            display_name=profile_name,
             member_id=attached_id,
         )
         row.use_count += 1
@@ -569,6 +601,14 @@ class PlatformInviteService:
         if row.use_count >= row.max_uses:
             row.status = "EXHAUSTED"
         await self.session.flush()
+        await invalidate_group_projections(
+            user_id,
+            moment.id,
+            moment_type=moment.moment_type or "SHARED_EXPERIENCE",
+            reason="invite:opaque_accepted",
+            session=self.session,
+            moment=moment,
+        )
         await AppBootstrapService(self.session).invalidate_cache(user_id)
         try:
             await get_event_publisher().publish(
@@ -588,6 +628,170 @@ class PlatformInviteService:
             "moment_type": moment.moment_type,
             "already_member": False,
             "participant_id": attached_id,
+        }
+
+    async def _accept_business_moment(
+        self, user_id: UUID, row: PlatformInviteModel, moment
+    ) -> dict:
+        """Accept opaque invite into a business moment with role from invite row."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from app.domains.business.models import BusinessMomentMembers, BusinessMoments
+        from app.domains.business.setup.member_roles import to_db_member_role
+        from app.domains.business.setup.team_ops_permissions import (
+            default_profile_for_role,
+            member_permission_flags,
+        )
+        from app.domains.users.models import UserModel
+
+        mid = moment.id
+        meta = dict(row.metadata_json or {})
+        local_id = str(meta.get("local_id") or "").strip() or None
+        role_api = (row.role_code or "MEMBER").upper()
+        if role_api == "OWNER":
+            role_api = "MEMBER"
+
+        # Already a member?
+        mem_result = await self.session.execute(
+            select(BusinessMomentMembers).where(
+                BusinessMomentMembers.moment_id == mid,
+                BusinessMomentMembers.user_id == user_id,
+            )
+        )
+        try:
+            existing_members = list(mem_result.scalars().all())
+        except Exception:
+            existing_members = []
+        active = next(
+            (
+                m
+                for m in existing_members
+                if (m.member_status or "").lower() not in {"removed"}
+            ),
+            None,
+        )
+        if active is not None or moment.user_id == user_id:
+            return {
+                "result": "ALREADY_MEMBER",
+                "moment_id": str(moment.id),
+                "moment_name": moment.title or "Your moment",
+                "moment_type": moment.moment_type,
+                "already_member": True,
+                "participant_id": str(active.member_id) if active else None,
+            }
+
+        if row.use_count >= row.max_uses:
+            row.status = "EXHAUSTED"
+            raise InviteOutcomeError("EXHAUSTED", "Invite has no remaining uses", 400)
+
+        bm = await self.session.execute(
+            select(BusinessMoments).where(BusinessMoments.moment_id == mid)
+        )
+        if bm.scalar_one_or_none() is None:
+            raise InviteOutcomeError("INVALID", "Business moment not found", 404)
+
+        pending = None
+        if local_id:
+            p_result = await self.session.execute(
+                select(BusinessMomentMembers).where(
+                    BusinessMomentMembers.moment_id == mid,
+                    BusinessMomentMembers.local_id == local_id,
+                )
+            )
+            try:
+                pending_rows = list(p_result.scalars().all())
+            except Exception:
+                pending_rows = []
+            pending = next(
+                (
+                    m
+                    for m in pending_rows
+                    if (m.member_status or "").lower() in {"invited", "configured"}
+                    and m.user_id is None
+                ),
+                pending_rows[0] if pending_rows else None,
+            )
+
+        user_row = (
+            await self.session.execute(select(UserModel).where(UserModel.id == user_id))
+        ).scalar_one_or_none()
+        display = (
+            (user_row.display_name or user_row.email or "Teammate")
+            if user_row
+            else "Teammate"
+        )
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_role = to_db_member_role(role_api, template_code=moment.moment_type or "")
+        flags = member_permission_flags(role_api)
+
+        if pending is not None:
+            if pending.user_id is not None and pending.user_id != user_id:
+                raise InviteOutcomeError(
+                    "INVALID", "This invitation belongs to another user", 403
+                )
+            pending.user_id = user_id
+            pending.name = str(display)[:255]
+            pending.role = db_role
+            pending.member_status = "active"
+            pending.permission_profile = default_profile_for_role(role_api)
+            pending.permission_version = 1
+            pending.updated_at = now
+            if user_row and user_row.email and not pending.email:
+                pending.email = user_row.email
+            for k, v in flags.items():
+                setattr(pending, k, v)
+            member_id = str(pending.member_id)
+        else:
+            member = BusinessMomentMembers(
+                member_id=uuid4(),
+                moment_id=mid,
+                name=str(display)[:255],
+                role=db_role,
+                member_status="active",
+                added_by=moment.user_id or user_id,
+                user_id=user_id,
+                email=user_row.email if user_row else None,
+                local_id=local_id,
+                permission_profile=default_profile_for_role(role_api),
+                permission_version=1,
+                created_at=now,
+                updated_at=now,
+                can_manage_operations_settings=False,
+                **flags,
+            )
+            self.session.add(member)
+            await self.session.flush()
+            member_id = str(member.member_id)
+
+        row.use_count += 1
+        row.last_used_at = _now()
+        if row.use_count >= row.max_uses:
+            row.status = "EXHAUSTED"
+        elif row.max_uses == 1:
+            row.status = "ACCEPTED"
+        await self.session.flush()
+        await AppBootstrapService(self.session).invalidate_cache(user_id)
+        try:
+            await get_event_publisher().publish(
+                invite_events.group_invite_accepted(
+                    user_id=user_id,
+                    invite_id=row.id,
+                    moment_id=moment.id,
+                    result="ACCEPTED",
+                )
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "result": "ACCEPTED",
+            "moment_id": str(moment.id),
+            "moment_name": moment.title or "Your moment",
+            "moment_type": moment.moment_type,
+            "already_member": False,
+            "participant_id": member_id,
+            "role_code": role_api,
+            "invite_type": "BUSINESS",
         }
 
     async def decline(self, user_id: UUID, code: str) -> dict:

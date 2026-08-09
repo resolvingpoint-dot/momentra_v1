@@ -519,56 +519,35 @@ class InviteService:
         display_name: str = "Member",
         member_id: str | None = None,
     ) -> None:
-        """Best-effort ACTIVE row in ``group_moment_members`` (+ stub ``group_moments``).
+        """Upsert ACTIVE row in ``group_moment_members`` (+ stub ``group_moments``).
 
         Shared Group moments live primarily on ``moments`` + runtime JSON. Relational
         roster FKs ``group_moments``; we upsert a stub when missing so inventory and
-        access gates that query ``GroupMomentMembers`` can see invitees. Failures are
-        ignored — runtime.members remains the canonical shared-moment roster.
+        access gates that query ``GroupMomentMembers`` can see invitees.
         """
         from uuid import UUID as _UUID
         from uuid import uuid4
 
-        from app.domains.group.models import GroupMomentMembers, GroupMoments
+        from app.domains.group.domain_row import ensure_group_moments_row
+        from app.domains.group.models import GroupMomentMembers
 
         mid = moment.id
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        try:
-            gm_result = await self.session.execute(
-                select(GroupMoments).where(GroupMoments.moment_id == mid)
-            )
-            group_row = gm_result.scalar_one_or_none()
-        except Exception:
-            group_row = None
+        name = (display_name or "Member").strip() or "Member"
 
-        if group_row is None:
-            try:
-                self.session.add(
-                    GroupMoments(
-                        moment_id=mid,
-                        moment_type=str(moment.moment_type or "TRIP"),
-                        moment_profile="DEFAULT",
-                        moment_name=str(moment.title or "Group moment"),
-                        status=str(moment.status or "ACTIVE"),
-                        stage="CREATED",
-                        created_by=moment.user_id,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                )
-            except Exception:
-                return
+        await ensure_group_moments_row(
+            self.session,
+            moment,
+            ensure_owner_member=False,
+        )
 
-        try:
-            mem_result = await self.session.execute(
-                select(GroupMomentMembers).where(
-                    GroupMomentMembers.moment_id == mid,
-                    GroupMomentMembers.user_id == user_id,
-                )
+        mem_result = await self.session.execute(
+            select(GroupMomentMembers).where(
+                GroupMomentMembers.moment_id == mid,
+                GroupMomentMembers.user_id == user_id,
             )
-            existing = list(mem_result.scalars().all())
-        except Exception:
-            existing = []
+        )
+        existing = list(mem_result.scalars().all())
 
         active = next(
             (
@@ -582,34 +561,29 @@ class InviteService:
         if active is not None:
             active.status = "ACTIVE"
             active.joined_at = active.joined_at or now
-            active.display_name = display_name or active.display_name
+            if name and (not active.display_name or active.display_name == "Member"):
+                active.display_name = name
+            elif name:
+                active.display_name = name
             return
 
         try:
-            roster_id = (
-                _UUID(str(member_id))
-                if member_id
-                else uuid4()
-            )
+            roster_id = _UUID(str(member_id)) if member_id else uuid4()
         except (ValueError, TypeError):
             roster_id = uuid4()
 
-        try:
-            self.session.add(
-                GroupMomentMembers(
-                    member_id=roster_id,
-                    moment_id=mid,
-                    display_name=display_name or "Member",
-                    role_code="PARTICIPANT",
-                    status="ACTIVE",
-                    created_at=now,
-                    joined_at=now,
-                    user_id=user_id,
-                )
+        self.session.add(
+            GroupMomentMembers(
+                member_id=roster_id,
+                moment_id=mid,
+                display_name=name,
+                role_code="PARTICIPANT",
+                status="ACTIVE",
+                created_at=now,
+                joined_at=now,
+                user_id=user_id,
             )
-        except Exception:
-            return
-
+        )
     async def _is_business_moment(self, moment) -> bool:
         from app.domains.business.models import BusinessMoments
         from app.domains.business.setup.invites import is_business_moment_type
@@ -1025,17 +999,31 @@ class InviteService:
         already = moment.user_id == user_id
         attached_id = None
         if not already:
+            from app.domains.group.member_names import resolve_user_display_name
+            from app.domains.group.projection_cache import invalidate_group_projections
+
+            profile_name = await resolve_user_display_name(self.session, user_id)
             attached_id = self._attach_accepter(
                 moment,
                 user_id,
                 participant_id=str(participant_id) if participant_id else None,
                 email=str(email) if email else None,
+                display_name=profile_name,
             )
             await self._upsert_group_roster_member(
                 moment,
                 user_id,
-                display_name="Member",
+                display_name=profile_name,
                 member_id=attached_id,
+            )
+            await self.session.flush()
+            await invalidate_group_projections(
+                user_id,
+                moment.id,
+                moment_type=moment.moment_type or "SHARED_EXPERIENCE",
+                reason="invite:accepted",
+                session=self.session,
+                moment=moment,
             )
 
         store.update_item(

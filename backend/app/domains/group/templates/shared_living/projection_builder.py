@@ -114,6 +114,11 @@ class SharedLivingProjectionBuilder:
         residents = _resident_items(moment)
         active_r, pending_r, inactive_r = _resident_status_counts(residents)
         avatars = [str(r.get("avatar_url")) for r in residents if r.get("avatar_url")][:8]
+        expected_residents = payload.get("expected_residents") if isinstance(payload, dict) else None
+        try:
+            expected_resident_count = int(expected_residents) if expected_residents is not None else None
+        except (TypeError, ValueError):
+            expected_resident_count = None
         return SharedLivingContext(
             moment=moment,
             profile=profile,
@@ -125,6 +130,7 @@ class SharedLivingProjectionBuilder:
             currency_code=currency,
             is_active=is_active,
             resident_count=len(residents),
+            expected_resident_count=expected_resident_count,
             expense_count=len(expenses),
             expense_total_minor=_sum_minor(expenses),
             contribution_total_minor=_sum_minor(contributions),

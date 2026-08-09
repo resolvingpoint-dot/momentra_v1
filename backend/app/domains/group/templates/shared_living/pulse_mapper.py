@@ -20,6 +20,13 @@ from app.domains.group.templates.shared_living.projection_helpers import (
 )
 
 
+def _resident_metric_value(ctx: SharedLivingContext) -> str:
+    """"3 of 5" when setup declared an expected headcount, else the raw joined count."""
+    if ctx.expected_resident_count and ctx.expected_resident_count > 0:
+        return f"{ctx.resident_count} of {ctx.expected_resident_count}"
+    return str(ctx.resident_count)
+
+
 def build_pulse(ctx: SharedLivingContext) -> dict:
     created = ctx.moment.updated_at or ctx.moment.created_at
     updated_label = ""
@@ -40,6 +47,7 @@ def build_pulse(ctx: SharedLivingContext) -> dict:
         "contributions_total_minor": ctx.contribution_total_minor,
         "outstanding_minor": outstanding_minor(ctx),
         "resident_count": ctx.resident_count,
+        "expected_residents": ctx.expected_resident_count,
         "health_percent": health,
         "experience_health_percent": health,
         "participation_percent": participation_percent(ctx),
@@ -94,7 +102,7 @@ def build_pulse(ctx: SharedLivingContext) -> dict:
             "updated_at_display": {"label": updated_label or "Just now", "minutes_ago": 0},
         },
         "metric_tiles": [
-            {"label": "Residents", "value": str(ctx.resident_count)},
+            {"label": "Residents", "value": _resident_metric_value(ctx)},
             {
                 "label": "Monthly Spend",
                 "value": format_money(ctx.expense_total_minor, ctx.currency_code) if ctx.expense_total_minor else "—",

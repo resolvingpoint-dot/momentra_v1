@@ -19,6 +19,7 @@ class SharedLivingContext:
     currency_code: str
     is_active: bool
     resident_count: int
+    expected_resident_count: int | None
     expense_count: int
     expense_total_minor: int
     contribution_total_minor: int

@@ -102,4 +102,12 @@ class SharedPurchaseService:
         return await self.activity.list_timeline(user_id, moment_id)
 
     async def invalidate(self, user_id: UUID, moment_id: UUID, *, reason: str = "manual") -> None:
-        await invalidate_group_projections(user_id, moment_id, moment_type=MOMENT_TYPE, reason=reason)
+        moment = await self._require(user_id, moment_id)
+        await invalidate_group_projections(
+            user_id,
+            moment_id,
+            moment_type=MOMENT_TYPE,
+            reason=reason,
+            session=self.session,
+            moment=moment,
+        )

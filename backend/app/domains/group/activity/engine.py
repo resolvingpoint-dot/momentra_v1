@@ -159,6 +159,8 @@ class GroupActivityEngine:
             moment_id,
             moment_type=moment.moment_type or "SHARED_EXPERIENCE",
             reason=f"activity:{activity_type.value}",
+            session=self.session,
+            moment=moment,
         )
         return row
 
@@ -179,6 +181,8 @@ class GroupActivityEngine:
             moment_id,
             moment_type=moment.moment_type or "SHARED_EXPERIENCE",
             reason="activity:patch",
+            session=self.session,
+            moment=moment,
         )
         return updated
 
@@ -201,6 +205,8 @@ class GroupActivityEngine:
             moment_id,
             moment_type=moment.moment_type or "SHARED_EXPERIENCE",
             reason="activity:delete",
+            session=self.session,
+            moment=moment,
         )
         return {"status": "deleted", "event_id": event_id}
 

@@ -99,8 +99,11 @@ class GroupReadService:
             )
             await self.session.flush()
             members = store.list_accepted_members(moment)
-        return members
+        from app.domains.group.member_names import enrich_member_display_names
 
+        return await enrich_member_display_names(
+            self.session, moment, members, write_back=True
+        )
     def _member_roster_fields(
         self, members: list[dict], *, user_id: UUID, include_guests: bool = True
     ) -> dict:

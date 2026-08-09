@@ -14,19 +14,37 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user_id
 from app.domains.group import app_schemas as s
 from app.domains.group.app_service import GroupAppService
+from app.domains.group.moment_stream import group_moment_stream_response
 
 router = APIRouter(prefix="/group", tags=["group"])
 
 
 def _service(db: AsyncSession) -> GroupAppService:
     return GroupAppService(db)
+
+
+@router.get("/moments/{moment_id}/stream")
+async def group_moment_stream(
+    moment_id: UUID,
+    request: Request,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """SSE invalidate push for SHARED_EXPERIENCE / PURCHASE / LIVING moments."""
+    return await group_moment_stream_response(
+        moment_id=moment_id,
+        request=request,
+        user_id=user_id,
+        db=db,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -166,6 +184,26 @@ async def archive_moment(
 ) -> dict:
     """Archive an app Group moment. Shadows legacy group_moments route."""
     return await _service(db).archive_moment(user_id, moment_id)
+
+
+@router.post("/moments/{moment_id}/delete")
+async def delete_moment(
+    moment_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Permanently delete a Group moment (ops purged, analytics retained)."""
+    return await _service(db).delete_moment(user_id, moment_id)
+
+
+@router.post("/moments/{moment_id}/leave")
+async def leave_moment(
+    moment_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Member exits a Group moment (owner must archive or delete)."""
+    return await _service(db).leave_moment(user_id, moment_id)
 
 
 # --------------------------------------------------------------------------- #
