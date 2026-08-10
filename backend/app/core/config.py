@@ -49,10 +49,15 @@ class Settings(BaseSettings):
     # Connection pool (SQLAlchemy async engine). Explicit, tunable values;
     # ``pool_recycle`` guards against stale connections on cloud Postgres, and
     # ``pool_pre_ping`` (set in database.py) validates connections on checkout.
+    # Keep recycle below typical idle timeouts (Supabase / PgBouncer / LB ~5–15m).
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_timeout: int = 30
-    db_pool_recycle: int = 1800
+    db_pool_recycle: int = 300
+    # asyncpg timeouts (seconds). Without these, a blackholed TCP conn can hang
+    # ~60s on checkout/pre-ping before ConnectionDoesNotExistError.
+    db_connect_timeout: int = 10
+    db_command_timeout: int = 30
 
     # Object storage (avatars / moment covers / memory media).
     # When unset, upload URLs are stubbed with /local-uploads (DEBUG only).

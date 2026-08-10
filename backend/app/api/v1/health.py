@@ -8,6 +8,7 @@ this router without a prefix.
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.core.cache import get_redis
 from app.core.config import settings
@@ -35,16 +36,21 @@ async def health() -> dict:
 
 
 @router.get("/health/ready", summary="Readiness probe")
-async def readiness() -> dict:
-    """Readiness probe — reports database, Redis, and Celery broker connectivity."""
+async def readiness() -> JSONResponse:
+    """Readiness probe — reports database, Redis, and Celery broker connectivity.
+
+    Returns HTTP 503 when any dependency is down so orchestrators stop routing
+    traffic (``/health`` alone stays 200 and does not check the DB).
+    """
     db_ok = await ping_db()
     redis = await get_redis()
     redis_ok = redis is not None
     celery_ok = await _ping_celery_broker()
     all_ok = db_ok and redis_ok and celery_ok
-    return {
+    payload = {
         "status": "ok" if all_ok else "degraded",
         "database": "up" if db_ok else "down",
         "redis": "up" if redis_ok else "down",
         "celery": "up" if celery_ok else "down",
     }
+    return JSONResponse(payload, status_code=200 if all_ok else 503)

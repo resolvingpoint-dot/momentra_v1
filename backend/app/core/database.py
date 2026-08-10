@@ -39,7 +39,14 @@ def _use_null_pool() -> bool:
 _engine_kwargs: dict = {
     "echo": settings.debug,
     "pool_pre_ping": True,
-    "connect_args": {"statement_cache_size": 0},  # PgBouncer compat
+    # statement_cache_size=0: PgBouncer transaction pooling compat.
+    # timeout / command_timeout: fail fast when Postgres or the path is dead
+    # (otherwise Linux TCP can stall ~60s → ConnectionDoesNotExistError).
+    "connect_args": {
+        "statement_cache_size": 0,
+        "timeout": max(1, int(settings.db_connect_timeout)),
+        "command_timeout": max(1, int(settings.db_command_timeout)),
+    },
 }
 if _use_null_pool():
     _engine_kwargs["poolclass"] = NullPool
@@ -84,6 +91,12 @@ async def ping_db() -> bool:
         return True
     except Exception as exc:  # noqa: BLE001 - readiness must never raise
         logger.warning("Database ping failed: %s", exc)
+        # Drop stale pooled sockets so the next request opens a fresh connection
+        # instead of replaying ConnectionDoesNotExistError for ~60s each time.
+        try:
+            await engine.dispose()
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to dispose engine after ping failure", exc_info=True)
         return False
 
 
