@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -18,13 +18,28 @@ class Settings(BaseSettings):
     firebase_client_email: str = ""
     firebase_private_key: str = ""
 
-    # JWT session tokens (legacy aliases)
-    session_secret_key: str = Field(default="", alias="jwt_secret")
+    # JWT session tokens (legacy). Accept JWT_SECRET on Linux (case-sensitive env)
+    # where alias="jwt_secret" alone does not match.
+    session_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "JWT_SECRET",
+            "jwt_secret",
+            "SESSION_SECRET_KEY",
+            "session_secret_key",
+        ),
+    )
     session_algorithm: str = "HS256"
     session_expire_hours: int = 72
 
-    # App session token (new, overrides legacy)
-    app_session_secret: str = ""
+    # Preferred session secret (overrides legacy JWT_SECRET when set).
+    app_session_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "APP_SESSION_SECRET",
+            "app_session_secret",
+        ),
+    )
     app_session_expires_minutes: int = 60
 
     # CORS
