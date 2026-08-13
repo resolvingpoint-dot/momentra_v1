@@ -12,7 +12,10 @@ from app.core.request_context import (
     set_build_coalesced,
     set_cache_hit,
     set_projection_build_ms,
+    set_projection_lock,
+    set_projection_state,
     set_projection_version,
+    set_refresh_enqueued,
 )
 from app.domains.group.projection_cache import (
     enqueue_group_projection_refresh,
@@ -31,6 +34,32 @@ _POLL_TIMEOUT = 2.0
 BuildFn = Callable[[], Awaitable[dict[str, Any]]]
 
 
+def _try_enqueue(
+    user_id: UUID,
+    moment_id: UUID,
+    *,
+    moment_type: str,
+    reason: str,
+) -> bool:
+    try:
+        enqueue_group_projection_refresh(
+            user_id,
+            moment_id,
+            moment_type=moment_type,
+            reason=reason,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "GroupLoad enqueue failed user=%s moment=%s reason=%s",
+            user_id,
+            moment_id,
+            reason,
+            exc_info=True,
+        )
+        return False
+
+
 async def cached_or_build(
     user_id: UUID,
     moment_id: UUID,
@@ -42,22 +71,41 @@ async def cached_or_build(
 ) -> dict[str, Any]:
     """Redis-first read with stale serve + single-flight rebuild.
 
-    ``force_refresh`` purges active+stale and sync-rebuilds (post-mutation path).
+    ``force_refresh`` marks stale and enqueues (FRESH→STALE→FRESH). Never purges
+    the last usable payload; sync-rebuild only on true miss.
     """
     template = template_key(moment_type, moment_id)
     t0 = time.perf_counter()
 
     if force_refresh:
-        await projection_cache.purge(user_id, template, slice_type)
-        record_cache_miss()
-        return await _get_or_build(
-            user_id,
-            moment_id,
+        logger.warning(
+            "force_refresh on group GET template=%s slice=%s — SWR, not sync rebuild",
+            template,
             slice_type,
-            build_fn,
-            moment_type=moment_type,
-            template=template,
         )
+        await projection_cache.mark_stale(user_id, template, slice_type)
+        enqueued = _try_enqueue(
+            user_id, moment_id, moment_type=moment_type, reason="manual"
+        )
+        set_refresh_enqueued(enqueued, reason="manual")
+        envelope = await get_cached_envelope(
+            user_id, moment_id, slice_type, moment_type=moment_type
+        )
+        if envelope is not None:
+            record_cache_hit()
+            set_cache_hit(True)
+            set_build_coalesced(True)
+            set_projection_state("stale")
+            set_projection_lock("none")
+            set_projection_version(envelope.version)
+            logger.debug(
+                "GroupLoad template=%s moment=%s tab=%s source=force_stale durationMs=%.1f",
+                moment_type,
+                moment_id,
+                slice_type,
+                (time.perf_counter() - t0) * 1000,
+            )
+            return envelope.payload
 
     envelope = await get_cached_envelope(
         user_id, moment_id, slice_type, moment_type=moment_type
@@ -65,6 +113,9 @@ async def cached_or_build(
     if envelope is not None and not envelope.stale:
         record_cache_hit()
         set_cache_hit(True)
+        set_projection_state("fresh")
+        set_projection_lock("none")
+        set_refresh_enqueued(False)
         set_projection_version(envelope.version)
         logger.debug(
             "GroupLoad template=%s moment=%s tab=%s source=cache durationMs=%.1f cacheHit=true",
@@ -76,28 +127,16 @@ async def cached_or_build(
         return envelope.payload
 
     if envelope is not None and envelope.stale:
-        # Stale is still a cache hit: keep the request path cheap and let the
-        # worker converge the projection. Invalidation also enqueues a refresh,
-        # but enqueue here as a self-healing fallback if that delivery failed.
         record_cache_hit()
         set_cache_hit(True)
         set_build_coalesced(True)
+        set_projection_state("stale")
+        set_projection_lock("none")
         set_projection_version(envelope.version)
-        try:
-            enqueue_group_projection_refresh(
-                user_id,
-                moment_id,
-                moment_type=moment_type,
-                reason="stale_serve",
-            )
-        except Exception:  # noqa: BLE001
-            logger.debug(
-                "GroupLoad stale enqueue failed user=%s template=%s slice=%s",
-                user_id,
-                template,
-                slice_type,
-                exc_info=True,
-            )
+        enqueued = _try_enqueue(
+            user_id, moment_id, moment_type=moment_type, reason="stale_serve"
+        )
+        set_refresh_enqueued(enqueued, reason="stale_serve")
         logger.debug(
             "GroupLoad template=%s moment=%s tab=%s source=stale durationMs=%.1f",
             moment_type,
@@ -108,6 +147,7 @@ async def cached_or_build(
         return envelope.payload
 
     record_cache_miss()
+    set_projection_state("miss")
     return await _get_or_build(
         user_id, moment_id, slice_type, build_fn, moment_type=moment_type, template=template
     )
@@ -125,10 +165,16 @@ async def _get_or_build(
     stale = await projection_cache.get_stale(user_id, template, slice_type)
     acquired = await projection_cache.acquire_build_lock(user_id, template, slice_type)
     if not acquired:
+        set_projection_lock("contended")
         if stale is not None:
             set_build_coalesced(True)
             set_cache_hit(True)
+            set_projection_state("stale")
             set_projection_version(stale.version)
+            enqueued = _try_enqueue(
+                user_id, moment_id, moment_type=moment_type, reason="stale_serve"
+            )
+            set_refresh_enqueued(enqueued, reason="stale_serve")
             logger.debug(
                 "GroupLoad template=%s moment=%s tab=%s source=stale duplicateSuppressed=true",
                 moment_type,
@@ -140,12 +186,15 @@ async def _get_or_build(
         if waited is not None:
             set_build_coalesced(True)
             set_cache_hit(True)
+            set_projection_state("fresh" if not waited.stale else "stale")
             set_projection_version(waited.version)
+            set_refresh_enqueued(False)
             return waited.payload
         acquired = await projection_cache.acquire_build_lock(user_id, template, slice_type)
 
     try:
         if acquired:
+            set_projection_lock("acquired")
             start = time.perf_counter()
             payload = await build_fn()
             await set_cached_slice(
@@ -154,6 +203,8 @@ async def _get_or_build(
             build_ms = (time.perf_counter() - start) * 1000
             set_projection_build_ms(build_ms)
             set_cache_hit(False)
+            set_projection_state("miss")
+            set_refresh_enqueued(False, reason="cold_miss")
             logger.debug(
                 "GroupLoad template=%s moment=%s tab=%s source=network durationMs=%.1f cacheHit=false",
                 moment_type,
@@ -162,16 +213,21 @@ async def _get_or_build(
                 build_ms,
             )
             return payload
+        set_projection_lock("contended")
         if stale is not None:
             set_build_coalesced(True)
             set_cache_hit(True)
+            set_projection_state("stale")
             set_projection_version(stale.version)
             return stale.payload
+        set_projection_lock("acquired")
         payload = await build_fn()
         await set_cached_slice(
             user_id, moment_id, slice_type, payload, moment_type=moment_type
         )
         set_cache_hit(False)
+        set_projection_state("miss")
+        set_refresh_enqueued(False, reason="cold_miss")
         return payload
     finally:
         if acquired:

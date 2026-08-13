@@ -75,9 +75,14 @@ async def refresh_slices_async(
     slices: list[str],
     *,
     reason: str,
-    mark_stale_first: bool = False,
+    mark_stale_first: bool = True,
     include_personal_life: bool = False,
 ) -> None:
+    """Mark slices STALE (preserve payload) and enqueue Celery — never hard-delete.
+
+    ``mark_stale_first=False`` is retained for rare callers that intentionally
+    want a cold miss, but all product invalidation paths must keep the default.
+    """
     code = normalize_moment_type_code(template)
     for slice_type in slices:
         if mark_stale_first:
@@ -108,7 +113,7 @@ async def invalidate_for_quick_add(
             [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
             reason=f"quick_add:{upper}",
             include_personal_life=True,
-            mark_stale_first=False,
+            mark_stale_first=True,
         )
     elif code == "LIFESTYLE" and upper in _LS_ACTIVITY:
         await refresh_slices_async(
@@ -117,7 +122,7 @@ async def invalidate_for_quick_add(
             [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
             reason=f"quick_add:{upper}",
             include_personal_life=True,
-            mark_stale_first=False,
+            mark_stale_first=True,
         )
     elif code == "RELATIONSHIPS" and upper in _RS_ACTIVITY:
         await refresh_slices_async(
@@ -126,7 +131,7 @@ async def invalidate_for_quick_add(
             [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
             reason=f"quick_add:{upper}",
             include_personal_life=True,
-            mark_stale_first=False,
+            mark_stale_first=True,
         )
     elif upper in _EXPENSE_LIKE:
         await refresh_slices_async(
@@ -135,7 +140,7 @@ async def invalidate_for_quick_add(
             [SLICE_PULSE, SLICE_MEMORY],
             reason=f"quick_add:{upper}",
             include_personal_life=True,
-            mark_stale_first=False,
+            mark_stale_first=True,
         )
     elif upper in _GOAL_LIKE:
         await refresh_slices_async(
@@ -143,7 +148,7 @@ async def invalidate_for_quick_add(
             code,
             [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
             reason=f"quick_add:{upper}",
-            mark_stale_first=False,
+            mark_stale_first=True,
         )
     else:
         await refresh_slices_async(
@@ -152,7 +157,7 @@ async def invalidate_for_quick_add(
             [SLICE_PULSE, SLICE_MEMORY],
             reason=f"quick_add:{upper}",
             include_personal_life=True,
-            mark_stale_first=False,
+            mark_stale_first=True,
         )
 
 
@@ -169,6 +174,7 @@ async def invalidate_for_lifecycle(
         [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
         reason=reason,
         include_personal_life=True,
+        mark_stale_first=True,
     )
 
 
@@ -180,6 +186,7 @@ async def invalidate_for_setup(user_id: UUID, template: str) -> None:
         [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
         reason="setup.completed",
         include_personal_life=True,
+        mark_stale_first=True,
     )
 
 
@@ -214,6 +221,7 @@ async def invalidate_for_master_expense(
         [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
         reason="master_expense.created",
         include_personal_life=True,
+        mark_stale_first=True,
     )
     await refresh_slices_async(
         user_id,
@@ -221,6 +229,7 @@ async def invalidate_for_master_expense(
         [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
         reason="master_expense.created",
         include_personal_life=False,
+        mark_stale_first=True,
     )
     if include_relationships:
         await refresh_slices_async(
@@ -229,4 +238,5 @@ async def invalidate_for_master_expense(
             [SLICE_PULSE, SLICE_MOMENTS, SLICE_MEMORY],
             reason="master_expense.created",
             include_personal_life=False,
+            mark_stale_first=True,
         )

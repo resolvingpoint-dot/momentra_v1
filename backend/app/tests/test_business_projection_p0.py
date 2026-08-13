@@ -29,6 +29,9 @@ async def test_cached_or_build_fresh_hit_does_not_build(monkeypatch):
     monkeypatch.setattr(projection_read, "record_cache_hit", lambda: None)
     monkeypatch.setattr(projection_read, "set_cache_hit", lambda *_a, **_k: None)
     monkeypatch.setattr(projection_read, "set_projection_version", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_state", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_lock", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_refresh_enqueued", lambda *_a, **_k: None)
 
     out = await projection_read.cached_or_build(
         user_id, moment_id, "moments", build, moment_type="TEAM_OPERATIONS"
@@ -60,6 +63,9 @@ async def test_stale_returns_immediately_and_enqueues_one_refresh(monkeypatch):
     monkeypatch.setattr(projection_read, "set_cache_hit", lambda *_a, **_k: None)
     monkeypatch.setattr(projection_read, "set_build_coalesced", lambda *_a, **_k: None)
     monkeypatch.setattr(projection_read, "set_projection_version", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_state", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_lock", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_refresh_enqueued", lambda *_a, **_k: None)
     monkeypatch.setattr(projection_read, "enqueue_business_projection_refresh", fake_enqueue)
 
     out = await projection_read.cached_or_build(
@@ -70,6 +76,52 @@ async def test_stale_returns_immediately_and_enqueues_one_refresh(monkeypatch):
     assert enqueues[0][1].get("slices") == "moments" or (
         len(enqueues[0][0]) >= 1
     )
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_serves_stale_without_sync_build(monkeypatch):
+    from app.domains.business import projection_read
+
+    user_id = uuid4()
+    moment_id = uuid4()
+    payload = {"preserved": True}
+    builds = {"n": 0}
+    marks: list = []
+    enqueues: list = []
+
+    async def mark_stale(*a, **_k):
+        marks.append(a)
+
+    async def fake_envelope(*_a, **_k):
+        return ProjectionEnvelope(version=9, updated_at="t", payload=payload, stale=True)
+
+    async def build():
+        builds["n"] += 1
+        return {"built": True}
+
+    monkeypatch.setattr(projection_read.projection_cache, "mark_stale", mark_stale)
+    monkeypatch.setattr(projection_read, "get_cached_envelope", fake_envelope)
+    monkeypatch.setattr(
+        projection_read,
+        "enqueue_business_projection_refresh",
+        lambda *a, **k: enqueues.append((a, k)),
+    )
+    monkeypatch.setattr(projection_read, "record_cache_hit", lambda: None)
+    monkeypatch.setattr(projection_read, "set_cache_hit", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_build_coalesced", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_version", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_state", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_lock", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_refresh_enqueued", lambda *_a, **_k: None)
+
+    out = await projection_read.cached_or_build(
+        user_id, moment_id, "pulse", build, force_refresh=True
+    )
+    assert out == payload
+    assert builds["n"] == 0
+    assert len(marks) == 1
+    assert len(enqueues) == 1
+    assert enqueues[0][1]["reason"] == "manual"
 
 
 @pytest.mark.asyncio
@@ -89,6 +141,9 @@ async def test_ten_parallel_misses_share_one_build_fn(monkeypatch):
     monkeypatch.setattr(projection_read, "record_cache_miss", lambda: None)
     monkeypatch.setattr(projection_read, "set_cache_hit", lambda *_a, **_k: None)
     monkeypatch.setattr(projection_read, "set_projection_build_ms", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_state", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_projection_lock", lambda *_a, **_k: None)
+    monkeypatch.setattr(projection_read, "set_refresh_enqueued", lambda *_a, **_k: None)
 
     async def coalesced_build():
         if shared["payload"] is not None:

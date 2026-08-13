@@ -97,15 +97,53 @@ async def _get_active_raw(user_id: UUID, template: str, slice_type: str) -> dict
     key = slice_key(user_id, template, slice_type)
     redis = await core_cache.get_redis()
     raw: Any = None
+    t0 = time.perf_counter()
     if redis:
         try:
             val = await redis.get(key)
             raw = json.loads(val) if val else None
         except Exception:
             raw = _memory_get(_in_memory_slices, key)
+        finally:
+            try:
+                from app.core.request_context import add_redis_ms
+
+                add_redis_ms((time.perf_counter() - t0) * 1000)
+            except Exception:  # noqa: BLE001
+                pass
     else:
         raw = _memory_get(_in_memory_slices, key)
     return raw if isinstance(raw, dict) else None
+
+
+async def get_stale(
+    user_id: UUID, template: str, slice_type: str
+) -> ProjectionEnvelope | None:
+    key = stale_key(user_id, template, slice_type)
+    redis = await core_cache.get_redis()
+    raw: Any = None
+    t0 = time.perf_counter()
+    if redis:
+        try:
+            val = await redis.get(key)
+            raw = json.loads(val) if val else None
+        except Exception:
+            raw = _memory_get(_in_memory_stale, key)
+        finally:
+            try:
+                from app.core.request_context import add_redis_ms
+
+                add_redis_ms((time.perf_counter() - t0) * 1000)
+            except Exception:  # noqa: BLE001
+                pass
+    else:
+        raw = _memory_get(_in_memory_stale, key)
+    if isinstance(raw, dict):
+        env = ProjectionEnvelope.from_dict(raw)
+        if env is not None:
+            env.stale = True
+        return env
+    return None
 
 
 async def get(
@@ -118,28 +156,6 @@ async def get(
     if stale is not None:
         stale.stale = True
         return stale
-    return None
-
-
-async def get_stale(
-    user_id: UUID, template: str, slice_type: str
-) -> ProjectionEnvelope | None:
-    key = stale_key(user_id, template, slice_type)
-    redis = await core_cache.get_redis()
-    raw: Any = None
-    if redis:
-        try:
-            val = await redis.get(key)
-            raw = json.loads(val) if val else None
-        except Exception:
-            raw = _memory_get(_in_memory_stale, key)
-    else:
-        raw = _memory_get(_in_memory_stale, key)
-    if isinstance(raw, dict):
-        env = ProjectionEnvelope.from_dict(raw)
-        if env is not None:
-            env.stale = True
-        return env
     return None
 
 
@@ -213,7 +229,11 @@ async def delete(user_id: UUID, template: str, slice_type: str) -> None:
 
 
 async def purge(user_id: UUID, template: str, slice_type: str) -> None:
-    """Delete active + stale keys (force_refresh must not SWR-serve marked-stale)."""
+    """Deprecated for GET force_refresh — prefer mark_stale (FRESH→STALE→FRESH).
+
+    Still deletes active+stale. Callers that need to protect the last usable
+    payload must use :func:`mark_stale` instead.
+    """
     await delete(user_id, template, slice_type)
     stale_k = stale_key(user_id, template, slice_type)
     _in_memory_stale.pop(stale_k, None)

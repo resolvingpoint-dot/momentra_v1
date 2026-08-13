@@ -13,7 +13,10 @@ from app.core.request_context import (
     set_build_coalesced,
     set_cache_hit,
     set_projection_build_ms,
+    set_projection_lock,
+    set_projection_state,
     set_projection_version,
+    set_refresh_enqueued,
 )
 from app.domains.personal.catalog import normalize_moment_type_code
 from app.domains.personal.templates.registry import get_template_projection_registry
@@ -52,16 +55,37 @@ class ProjectionReadService:
         else:
             cache_template = code
 
+        # force_refresh must never destroy the last usable payload.
+        # FRESH → STALE → enqueue; serve stale. Sync build only on true miss.
         if force_refresh:
-            await projection_cache.delete(user_id, cache_template, slice_type)
-            await self._build_and_store(
-                user_id, cache_template, slice_type, reason=reason or "force_refresh"
+            logger.warning(
+                "force_refresh on personal GET template=%s slice=%s — SWR, not sync rebuild",
+                cache_template,
+                slice_type,
             )
+            await projection_cache.mark_stale(user_id, cache_template, slice_type)
+            enqueued = self._enqueue_stale_rebuild(
+                user_id, cache_template, slice_type, reason="manual"
+            )
+            set_refresh_enqueued(enqueued, reason="manual")
+            envelope = await projection_cache.get(user_id, cache_template, slice_type)
+            if envelope is not None:
+                record_cache_hit()
+                set_cache_hit(True)
+                set_build_coalesced(True)
+                set_projection_state("stale")
+                set_projection_lock("none")
+                set_projection_version(envelope.version)
+                return envelope.payload
+            # True miss after mark_stale — fall through to sync build.
 
         envelope = await projection_cache.get(user_id, cache_template, slice_type)
         if envelope is not None and not envelope.stale:
             record_cache_hit()
             set_cache_hit(True)
+            set_projection_state("fresh")
+            set_projection_lock("none")
+            set_refresh_enqueued(False)
             set_projection_version(envelope.version)
             return envelope.payload
 
@@ -69,15 +93,29 @@ class ProjectionReadService:
             record_cache_hit()
             set_cache_hit(True)
             set_build_coalesced(True)
+            set_projection_state("stale")
+            set_projection_lock("none")
             set_projection_version(envelope.version)
-            self._enqueue_stale_rebuild(user_id, cache_template, slice_type)
+            enqueued = self._enqueue_stale_rebuild(
+                user_id, cache_template, slice_type, reason="stale_serve"
+            )
+            set_refresh_enqueued(enqueued, reason="stale_serve")
             return envelope.payload
 
         record_cache_miss()
-        return await self._get_or_build(user_id, cache_template, slice_type, reason=reason)
+        set_projection_state("miss")
+        return await self._get_or_build(
+            user_id, cache_template, slice_type, reason=reason or "cold_miss"
+        )
 
     @staticmethod
-    def _enqueue_stale_rebuild(user_id: UUID, template: str, slice_type: str) -> None:
+    def _enqueue_stale_rebuild(
+        user_id: UUID,
+        template: str,
+        slice_type: str,
+        *,
+        reason: str = "stale_serve",
+    ) -> bool:
         """Serve-stale path: refresh active key via Celery (safe vs request session)."""
         try:
             from app.workers.tasks import projections as proj_tasks
@@ -90,8 +128,9 @@ class ProjectionReadService:
             }
             task = task_by_slice.get(slice_type)
             if task is None:
-                return
-            task.delay(str(user_id), template, "stale_serve")
+                return False
+            task.delay(str(user_id), template, reason)
+            return True
         except Exception:  # noqa: BLE001
             logger.debug(
                 "Failed to enqueue stale rebuild user=%s template=%s slice=%s",
@@ -100,6 +139,7 @@ class ProjectionReadService:
                 slice_type,
                 exc_info=True,
             )
+            return False
 
     async def _get_or_build(
         self,
@@ -112,36 +152,53 @@ class ProjectionReadService:
         stale = await projection_cache.get_stale(user_id, template, slice_type)
         acquired = await projection_cache.acquire_build_lock(user_id, template, slice_type)
         if not acquired:
+            set_projection_lock("contended")
             if stale is not None:
                 set_build_coalesced(True)
                 set_cache_hit(True)
+                set_projection_state("stale")
                 set_projection_version(stale.version)
+                enqueued = self._enqueue_stale_rebuild(
+                    user_id, template, slice_type, reason="stale_serve"
+                )
+                set_refresh_enqueued(enqueued, reason="stale_serve")
                 return stale.payload
             waited = await self._wait_for_slice(user_id, template, slice_type)
             if waited is not None:
                 set_build_coalesced(True)
                 set_cache_hit(True)
+                set_projection_state("fresh" if not waited.stale else "stale")
                 set_projection_version(waited.version)
+                set_refresh_enqueued(False)
                 return waited.payload
             acquired = await projection_cache.acquire_build_lock(user_id, template, slice_type)
 
         try:
             if acquired:
+                set_projection_lock("acquired")
                 start = time.perf_counter()
                 payload = await self._build_and_store(
-                    user_id, template, slice_type, reason=reason or "cache_miss"
+                    user_id, template, slice_type, reason=reason or "cold_miss"
                 )
                 set_projection_build_ms((time.perf_counter() - start) * 1000)
                 set_cache_hit(False)
+                set_projection_state("miss")
+                set_refresh_enqueued(False, reason="cold_miss")
                 return payload
+            set_projection_lock("contended")
             if stale is not None:
                 set_build_coalesced(True)
                 set_cache_hit(True)
+                set_projection_state("stale")
                 set_projection_version(stale.version)
                 return stale.payload
-            return await self._build_and_store(
-                user_id, template, slice_type, reason=reason or "cold_start"
+            set_projection_lock("acquired")
+            payload = await self._build_and_store(
+                user_id, template, slice_type, reason=reason or "cold_miss"
             )
+            set_projection_state("miss")
+            set_refresh_enqueued(False, reason="cold_miss")
+            return payload
         finally:
             if acquired:
                 await projection_cache.release_build_lock(user_id, template, slice_type)
@@ -174,7 +231,7 @@ class ProjectionReadService:
         if slice_type == "life":
             if template == PERSONAL_LIFE_TEMPLATE:
                 return await self._builder.build_personal_life(
-                    user_id, reason=reason, force_refresh=reason == "force_refresh"
+                    user_id, reason=reason, force_refresh=False
                 )
             return await self._builder.build_template_life(user_id, template, reason=reason)
         raise ValueError(f"Unknown projection slice: {slice_type}")

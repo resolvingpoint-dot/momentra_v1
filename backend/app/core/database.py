@@ -2,14 +2,36 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _install_query_timing(sync_engine) -> None:
+    """Accumulate per-request SQL count/ms onto request_context (REST parity)."""
+
+    @event.listens_for(sync_engine, "before_cursor_execute")
+    def _before_cursor_execute(conn, _cursor, _statement, _parameters, _context, _executemany):
+        conn.info["momentra_query_start"] = time.perf_counter()
+
+    @event.listens_for(sync_engine, "after_cursor_execute")
+    def _after_cursor_execute(conn, _cursor, _statement, _parameters, _context, _executemany):
+        start = conn.info.pop("momentra_query_start", None)
+        if start is None:
+            return
+        duration_ms = (time.perf_counter() - start) * 1000
+        try:
+            from app.core.request_context import add_db_query
+
+            add_db_query(duration_ms)
+        except Exception:  # noqa: BLE001
+            pass
 
 _async_url: str | None = None
 if settings.database_url:
@@ -59,6 +81,9 @@ else:
     )
 
 engine = create_async_engine(_async_url, **_engine_kwargs) if _async_url else None
+
+if engine is not None:
+    _install_query_timing(engine.sync_engine)
 
 async_session_factory = (
     async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

@@ -19,7 +19,10 @@ from app.core.request_context import (
     set_build_coalesced,
     set_cache_hit,
     set_projection_build_ms,
+    set_projection_lock,
+    set_projection_state,
     set_projection_version,
+    set_refresh_enqueued,
 )
 from app.domains.business.projection_cache import (
     USER_AGG_TEMPLATE,
@@ -70,6 +73,40 @@ def _log_projection_read(
     )
 
 
+def _try_enqueue_moment(
+    user_id: UUID,
+    moment_id: UUID,
+    *,
+    moment_type: str,
+    reason: str,
+) -> bool:
+    try:
+        enqueue_business_projection_refresh(
+            user_id,
+            moment_id,
+            moment_type=moment_type,
+            reason=reason,
+            slices="moments",
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        logger.debug("Failed to enqueue business SWR refresh", exc_info=True)
+        return False
+
+
+def _try_enqueue_user_agg(user_id: UUID, *, reason: str) -> bool:
+    try:
+        from app.domains.business.projection_cache import (
+            enqueue_business_user_agg_refresh,
+        )
+
+        enqueue_business_user_agg_refresh(user_id, reason=reason)
+        return True
+    except Exception:  # noqa: BLE001
+        logger.debug("Failed to enqueue user-agg stale refresh", exc_info=True)
+        return False
+
+
 async def cached_or_build(
     user_id: UUID,
     moment_id: UUID,
@@ -81,30 +118,43 @@ async def cached_or_build(
 ) -> dict[str, Any]:
     """Redis-first moment slice read. Miss → build_fn (owns bundle lock + Redis writes).
 
-    ``force_refresh`` purges active+stale and sync-rebuilds (post-mutation path).
+    ``force_refresh`` marks stale and enqueues (FRESH→STALE→FRESH). Never purges
+    the last usable payload; sync-rebuild only on true miss.
     """
     t0 = time.perf_counter()
     template = template_key(moment_type, moment_id)
 
     if force_refresh:
-        await projection_cache.purge(user_id, template, slice_type)
-        record_cache_miss()
-        start = time.perf_counter()
-        payload = await build_fn()
-        build_ms = (time.perf_counter() - start) * 1000
-        set_projection_build_ms(build_ms)
-        set_cache_hit(False)
-        _log_projection_read(
-            moment_id=moment_id,
-            moment_type=moment_type,
-            slice_type=slice_type,
-            cache_source="force_refresh",
-            lock_role="builder",
-            redis_read_ms=0.0,
-            context_ms=build_ms,
-            total_ms=(time.perf_counter() - t0) * 1000,
+        logger.warning(
+            "force_refresh on business GET template=%s slice=%s — SWR, not sync rebuild",
+            template,
+            slice_type,
         )
-        return payload
+        await projection_cache.mark_stale(user_id, template, slice_type)
+        enqueued = _try_enqueue_moment(
+            user_id, moment_id, moment_type=moment_type, reason="manual"
+        )
+        set_refresh_enqueued(enqueued, reason="manual")
+        envelope = await get_cached_envelope(
+            user_id, moment_id, slice_type, moment_type=moment_type
+        )
+        if envelope is not None:
+            record_cache_hit()
+            set_cache_hit(True)
+            set_build_coalesced(True)
+            set_projection_state("stale")
+            set_projection_lock("none")
+            set_projection_version(envelope.version)
+            _log_projection_read(
+                moment_id=moment_id,
+                moment_type=moment_type,
+                slice_type=slice_type,
+                cache_source="force_stale",
+                lock_role="none",
+                redis_read_ms=(time.perf_counter() - t0) * 1000,
+                total_ms=(time.perf_counter() - t0) * 1000,
+            )
+            return envelope.payload
 
     envelope = await get_cached_envelope(
         user_id, moment_id, slice_type, moment_type=moment_type
@@ -114,6 +164,9 @@ async def cached_or_build(
     if envelope is not None and not envelope.stale:
         record_cache_hit()
         set_cache_hit(True)
+        set_projection_state("fresh")
+        set_projection_lock("none")
+        set_refresh_enqueued(False)
         set_projection_version(envelope.version)
         _log_projection_read(
             moment_id=moment_id,
@@ -130,18 +183,13 @@ async def cached_or_build(
         record_cache_hit()
         set_cache_hit(True)
         set_build_coalesced(True)
+        set_projection_state("stale")
+        set_projection_lock("none")
         set_projection_version(envelope.version)
-        # Return immediately; queue at most one background refresh.
-        try:
-            enqueue_business_projection_refresh(
-                user_id,
-                moment_id,
-                moment_type=moment_type,
-                reason="stale_swr",
-                slices="moments",
-            )
-        except Exception:  # noqa: BLE001
-            logger.debug("Failed to enqueue stale SWR refresh", exc_info=True)
+        enqueued = _try_enqueue_moment(
+            user_id, moment_id, moment_type=moment_type, reason="stale_serve"
+        )
+        set_refresh_enqueued(enqueued, reason="stale_serve")
         _log_projection_read(
             moment_id=moment_id,
             moment_type=moment_type,
@@ -154,12 +202,15 @@ async def cached_or_build(
         return envelope.payload
 
     record_cache_miss()
+    set_projection_state("miss")
+    set_projection_lock("acquired")
     # Bundle single-flight + Redis writes live entirely inside build_fn.
     start = time.perf_counter()
     payload = await build_fn()
     build_ms = (time.perf_counter() - start) * 1000
     set_projection_build_ms(build_ms)
     set_cache_hit(False)
+    set_refresh_enqueued(False, reason="cold_miss")
     _log_projection_read(
         moment_id=moment_id,
         moment_type=moment_type,
@@ -182,19 +233,46 @@ async def cached_or_build_user_agg(
 ) -> dict[str, Any]:
     """Redis-first Life/Memory aggregates (user-scoped template BUSINESS_USER).
 
-    ``force_refresh`` purges active+stale and sync-rebuilds under the user-agg lock.
+    ``force_refresh`` marks stale and enqueues; sync-rebuild only on true miss.
     """
     t0 = time.perf_counter()
 
     if force_refresh:
-        await projection_cache.purge(user_id, USER_AGG_TEMPLATE, slice_type)
+        logger.warning(
+            "force_refresh on business user-agg GET slice=%s — SWR, not sync rebuild",
+            slice_type,
+        )
+        await projection_cache.mark_stale(user_id, USER_AGG_TEMPLATE, slice_type)
+        enqueued = _try_enqueue_user_agg(user_id, reason="manual")
+        set_refresh_enqueued(enqueued, reason="manual")
+        envelope = await get_user_agg_envelope(user_id, slice_type)
+        if envelope is not None:
+            record_cache_hit()
+            set_cache_hit(True)
+            set_build_coalesced(True)
+            set_projection_state("stale")
+            set_projection_lock("none")
+            set_projection_version(envelope.version)
+            _log_projection_read(
+                moment_id=None,
+                moment_type=USER_AGG_TEMPLATE,
+                slice_type=slice_type,
+                cache_source="force_stale",
+                lock_role="none",
+                redis_read_ms=(time.perf_counter() - t0) * 1000,
+                total_ms=(time.perf_counter() - t0) * 1000,
+            )
+            return envelope.payload
 
     envelope = await get_user_agg_envelope(user_id, slice_type)
     redis_read_ms = (time.perf_counter() - t0) * 1000
 
-    if not force_refresh and envelope is not None and not envelope.stale:
+    if envelope is not None and not envelope.stale:
         record_cache_hit()
         set_cache_hit(True)
+        set_projection_state("fresh")
+        set_projection_lock("none")
+        set_refresh_enqueued(False)
         set_projection_version(envelope.version)
         _log_projection_read(
             moment_id=None,
@@ -207,19 +285,15 @@ async def cached_or_build_user_agg(
         )
         return envelope.payload
 
-    if not force_refresh and envelope is not None and envelope.stale:
+    if envelope is not None and envelope.stale:
         record_cache_hit()
         set_cache_hit(True)
         set_build_coalesced(True)
+        set_projection_state("stale")
+        set_projection_lock("none")
         set_projection_version(envelope.version)
-        try:
-            from app.domains.business.projection_cache import (
-                enqueue_business_user_agg_refresh,
-            )
-
-            enqueue_business_user_agg_refresh(user_id, reason="stale_swr_user_agg")
-        except Exception:  # noqa: BLE001
-            logger.debug("Failed to enqueue user-agg stale refresh", exc_info=True)
+        enqueued = _try_enqueue_user_agg(user_id, reason="stale_serve")
+        set_refresh_enqueued(enqueued, reason="stale_serve")
         _log_projection_read(
             moment_id=None,
             moment_type=USER_AGG_TEMPLATE,
@@ -232,17 +306,21 @@ async def cached_or_build_user_agg(
         return envelope.payload
 
     record_cache_miss()
+    set_projection_state("miss")
     acquired = await projection_cache.acquire_build_lock(
         user_id, USER_AGG_TEMPLATE, slice_type
     )
     lock_role = "builder" if acquired else "waiter"
+    set_projection_lock("acquired" if acquired else "contended")
     try:
         if not acquired:
             waited = await _wait_for_slice(user_id, USER_AGG_TEMPLATE, slice_type)
             if waited is not None:
                 set_build_coalesced(True)
                 set_cache_hit(True)
+                set_projection_state("fresh" if not waited.stale else "stale")
                 set_projection_version(waited.version)
+                set_refresh_enqueued(False)
                 _log_projection_read(
                     moment_id=None,
                     moment_type=USER_AGG_TEMPLATE,
@@ -257,6 +335,7 @@ async def cached_or_build_user_agg(
                 user_id, USER_AGG_TEMPLATE, slice_type
             )
             lock_role = "builder" if acquired else "none"
+            set_projection_lock("acquired" if acquired else "none")
 
         start = time.perf_counter()
         payload = await build_fn()
@@ -265,6 +344,7 @@ async def cached_or_build_user_agg(
         redis_write_ms = (time.perf_counter() - write_start) * 1000
         set_projection_build_ms((time.perf_counter() - start) * 1000)
         set_cache_hit(False)
+        set_refresh_enqueued(False, reason="cold_miss")
         _log_projection_read(
             moment_id=None,
             moment_type=USER_AGG_TEMPLATE,

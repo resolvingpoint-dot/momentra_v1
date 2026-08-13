@@ -59,6 +59,79 @@ async def test_session_bearer_short_circuits_firebase(monkeypatch):
     assert firebase_calls["n"] == 0
 
 
+@pytest.mark.asyncio
+async def test_personal_force_refresh_serves_stale_no_sync_build(monkeypatch):
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domains.projections.projection_cache import ProjectionEnvelope
+    from app.domains.projections.projection_service import ProjectionReadService
+
+    service = ProjectionReadService(SimpleNamespace())
+    user_id = uuid4()
+    payload = {"pulse": True}
+    builds = {"n": 0}
+    marks: list = []
+    delays: list = []
+
+    async def mark_stale(*a, **_k):
+        marks.append(a)
+
+    async def get(*_a, **_k):
+        return ProjectionEnvelope(version=1, updated_at="t", payload=payload, stale=True)
+
+    async def build_and_store(*_a, **_k):
+        builds["n"] += 1
+        return {"built": True}
+
+    monkeypatch.setattr(
+        "app.domains.projections.projection_service.projection_cache.mark_stale",
+        mark_stale,
+    )
+    monkeypatch.setattr(
+        "app.domains.projections.projection_service.projection_cache.get",
+        get,
+    )
+    monkeypatch.setattr(service, "_build_and_store", build_and_store)
+    monkeypatch.setattr(
+        service,
+        "_enqueue_stale_rebuild",
+        lambda *a, **k: delays.append((a, k)) or True,
+    )
+
+    out = await service.get_slice(user_id, "LIFE_OPERATIONS", "pulse", force_refresh=True)
+    assert out == payload
+    assert builds["n"] == 0
+    assert len(marks) == 1
+    assert delays and delays[0][1].get("reason") == "manual"
+
+
+@pytest.mark.asyncio
+async def test_quick_add_invalidation_marks_stale_not_delete(monkeypatch):
+    from uuid import uuid4
+
+    from app.domains.projections import invalidation
+
+    user_id = uuid4()
+    marks: list = []
+    deletes: list = []
+
+    async def mark_stale(*a, **_k):
+        marks.append(a)
+
+    async def delete(*a, **_k):
+        deletes.append(a)
+
+    monkeypatch.setattr(invalidation.projection_cache, "mark_stale", mark_stale)
+    monkeypatch.setattr(invalidation.projection_cache, "delete", delete)
+    monkeypatch.setattr(invalidation, "invalidate_projection_cache", lambda *_a: None)
+    monkeypatch.setattr(invalidation, "_enqueue_slice", lambda *_a, **_k: None)
+
+    await invalidation.invalidate_for_quick_add(user_id, "LIFE_OPERATIONS", "EXPENSE")
+    assert marks
+    assert not deletes
+
+
 def test_firebase_verification_uses_short_ttl_cache(monkeypatch):
     from app.core import firebase
 
