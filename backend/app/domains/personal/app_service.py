@@ -37,6 +37,10 @@ from app.domains.personal.templates.future_building.setup_schema import (
     FUTURE_BUILDING_TEMPLATE_CONTRACT,
     upsert_future_building_profile,
 )
+from app.domains.personal.templates.life_operations.setup_schema import (
+    LIFE_OPERATIONS_TEMPLATE_CONTRACT,
+    upsert_life_operations_profile,
+)
 from app.domains.personal.templates.lifestyle.setup_schema import (
     LIFESTYLE_TEMPLATE_CONTRACT,
     upsert_lifestyle_profile,
@@ -894,14 +898,40 @@ class PersonalAppService:
         self, moment: MomentModel, answers: dict | None = None
     ) -> s.PersonalSetupResponse:
         from app.domains.personal.templates.future_building.setup_schema import (
-            FUTURE_BUILDING_TEMPLATE_CONTRACT,
             to_setup_fields as fb_setup_fields,
+        )
+        from app.domains.personal.templates.life_operations.setup_schema import (
+            to_setup_fields as lo_setup_fields,
         )
         from app.domains.personal.templates.lifestyle.setup_schema import (
             to_setup_fields as ls_setup_fields,
         )
 
         code = normalize_moment_type_code(moment.moment_type or "")
+        if code == "LIFE_OPERATIONS":
+            fields = [
+                s.PersonalSetupField(**field) for field in lo_setup_fields()
+            ]
+            return s.PersonalSetupResponse(
+                moment_id=str(moment.id),
+                moment_type_code=code,
+                moment_name=moment.title or moment_type_name(code),
+                status=moment.status,
+                title="Life Operations Setup",
+                subtitle="Align your rhythm and what restores you.",
+                fields=fields,
+                mission=s.PersonalSetupMission(
+                    badge_label="Your Mission",
+                    title="Build an operating rhythm that works with you",
+                    body=(
+                        "Momentra uses your patterns to shape a personal system "
+                        "for steadier energy, clearer priorities and meaningful recovery."
+                    ),
+                ),
+                saved_answers=answers,
+                cta_label="Begin My New Rhythm",
+                footer_note="Your rhythm adapts as you live",
+            )
         if code == "FUTURE_BUILDING":
             fields = [
                 s.PersonalSetupField(**field) for field in fb_setup_fields()
@@ -980,6 +1010,7 @@ class PersonalAppService:
     async def setup_get(self, user_id: UUID, moment_id: UUID) -> dict:
         from app.domains.personal.models import (
             PersonalFutureBuildingProfile,
+            PersonalLifeOperationsProfile,
             PersonalLifestyleProfile,
             PersonalRelationshipsProfile,
         )
@@ -988,6 +1019,12 @@ class PersonalAppService:
         )
         from app.domains.personal.templates.future_building.setup_schema import (
             merge_saved_answers as merge_fb_answers,
+        )
+        from app.domains.personal.templates.life_operations.setup_draft import (
+            load_setup_draft as load_lo_draft,
+        )
+        from app.domains.personal.templates.life_operations.setup_schema import (
+            merge_saved_answers as merge_lo_answers,
         )
         from app.domains.personal.templates.lifestyle.setup_draft import (
             load_setup_draft as load_ls_draft,
@@ -1011,7 +1048,20 @@ class PersonalAppService:
             step="get",
         )
         answers: dict | None = None
-        if code == "FUTURE_BUILDING":
+        if code == "LIFE_OPERATIONS":
+            from sqlalchemy import select
+
+            draft = await load_lo_draft(self.session, moment_id)
+            result = await self.session.execute(
+                select(PersonalLifeOperationsProfile).where(
+                    PersonalLifeOperationsProfile.moment_id == moment_id
+                )
+            )
+            profile = result.scalar_one_or_none()
+            merged = merge_lo_answers(draft, profile)
+            if merged:
+                answers = merged
+        elif code == "FUTURE_BUILDING":
             from sqlalchemy import select
 
             draft = await load_fb_draft(self.session, moment_id)
@@ -1056,20 +1106,14 @@ class PersonalAppService:
         from app.domains.personal.templates.future_building.setup_draft import (
             save_setup_draft as save_fb_draft,
         )
-        from app.domains.personal.templates.future_building.setup_schema import (
-            FUTURE_BUILDING_TEMPLATE_CONTRACT,
+        from app.domains.personal.templates.life_operations.setup_draft import (
+            save_setup_draft as save_lo_draft,
         )
         from app.domains.personal.templates.lifestyle.setup_draft import (
             save_setup_draft as save_ls_draft,
         )
-        from app.domains.personal.templates.lifestyle.setup_schema import (
-            LIFESTYLE_TEMPLATE_CONTRACT,
-        )
         from app.domains.personal.templates.relationships.setup_draft import (
             save_setup_draft as save_rs_draft,
-        )
-        from app.domains.personal.templates.relationships.setup_schema import (
-            RELATIONSHIPS_TEMPLATE_CONTRACT,
         )
 
         moment = await self._require_moment(user_id, moment_id)
@@ -1081,7 +1125,10 @@ class PersonalAppService:
             step="draft",
         )
         normalized = dict(answers)
-        if code == "FUTURE_BUILDING":
+        if code == "LIFE_OPERATIONS":
+            normalized = LIFE_OPERATIONS_TEMPLATE_CONTRACT.normalize_answers(answers)
+            await save_lo_draft(self.session, user_id, moment_id, normalized)
+        elif code == "FUTURE_BUILDING":
             normalized = FUTURE_BUILDING_TEMPLATE_CONTRACT.normalize_answers(answers)
             await save_fb_draft(self.session, user_id, moment_id, normalized)
         elif code == "LIFESTYLE":
@@ -1110,7 +1157,15 @@ class PersonalAppService:
             "runtime_priorities": ["Consistency", "Recovery", "Focus"],
             "identity_chips": ["Builder", "Balanced"],
         }
-        if code == "FUTURE_BUILDING":
+        if code == "LIFE_OPERATIONS":
+            block = LIFE_OPERATIONS_TEMPLATE_CONTRACT.preview_block(answers)
+            preview_kwargs["narrative"] = block["narrative"]
+            preview_kwargs["rhythm"] = block["rhythm"]
+            preview_kwargs["pressure"] = block["pressure"]
+            preview_kwargs["recovery"] = block["recovery"]
+            preview_kwargs["runtime_priorities"] = block["runtime_priorities"]
+            preview_kwargs["identity_chips"] = block["identity_chips"]
+        elif code == "FUTURE_BUILDING":
             preview_kwargs["future_building"] = FUTURE_BUILDING_TEMPLATE_CONTRACT.preview_block(
                 answers
             )
@@ -1149,7 +1204,12 @@ class PersonalAppService:
                 title=name.strip(),
             )
             moment = await self._adapter.get_model(user_id, moment_id)
-        if code == "FUTURE_BUILDING":
+        if code == "LIFE_OPERATIONS":
+            await ensure_personal_moment(self.session, moment)
+            await upsert_life_operations_profile(
+                self.session, user_id, moment_id, answers
+            )
+        elif code == "FUTURE_BUILDING":
             await ensure_personal_moment(self.session, moment)
             await upsert_future_building_profile(
                 self.session, user_id, moment_id, answers
@@ -1169,7 +1229,7 @@ class PersonalAppService:
             )
         _, visible, _, _ = await self._load_moment_inventories(user_id)
         await self._sync_module_states(user_id, visible_moments=visible)
-        if code in ("FUTURE_BUILDING", "LIFESTYLE", "RELATIONSHIPS"):
+        if code in ("LIFE_OPERATIONS", "FUTURE_BUILDING", "LIFESTYLE", "RELATIONSHIPS"):
             from app.workers import procedures as procs
 
             await procs.try_refresh_personal_orchestration(self.session, moment_id)
