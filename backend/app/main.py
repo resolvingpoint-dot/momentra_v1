@@ -119,6 +119,7 @@ if not settings.debug:
         app,
         max_requests=settings.rate_limit_max_requests,
         window_seconds=settings.rate_limit_window_seconds,
+        anon_max_requests=settings.rate_limit_anon_max_requests,
     )
 
 if settings.enable_metrics or settings.debug:

@@ -157,8 +157,10 @@ class Settings(BaseSettings):
     def effective_celery_result_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
 
-    # Rate limiting
-    rate_limit_max_requests: int = 60
+    # Rate limiting (authenticated users share one bucket across paths —
+    # app fan-out needs headroom; anon stays per-path and stricter).
+    rate_limit_max_requests: int = 300
+    rate_limit_anon_max_requests: int = 60
     rate_limit_window_seconds: int = 60
 
     # Observability (Phase 1 platform)

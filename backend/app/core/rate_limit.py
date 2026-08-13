@@ -6,8 +6,7 @@ import time
 from collections import defaultdict
 from typing import Callable
 
-from fastapi import FastAPI, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -20,6 +19,10 @@ _lock = asyncio.Lock()
 
 _redis_client = None
 _redis_attempted = False
+
+_RL_KEY_STATE = "rate_limit_key"
+_RL_MEMBER_STATE = "rate_limit_member"
+_RL_TS_STATE = "rate_limit_ts"
 
 
 async def _get_redis():
@@ -73,15 +76,16 @@ def peek_bearer_uid(request: Request) -> str | None:
     return str(sub)
 
 
-def _rate_limit_key(request: Request) -> str:
+def _rate_limit_key(request: Request) -> tuple[str, bool]:
+    """Return (key, is_authenticated_key)."""
     uid = peek_bearer_uid(request) or getattr(request.state, "user_uid", None)
     if uid:
-        return f"rl:{uid}"
+        return f"rl:{uid}", True
     forwarded = request.headers.get("x-forwarded-for", "")
     ip = forwarded.split(",")[0].strip() if forwarded else (
         request.client.host if request.client else "unknown"
     )
-    return f"rl:{ip}:{request.url.path}"
+    return f"rl:{ip}:{request.url.path}", False
 
 
 async def check_rate_limit(
@@ -89,8 +93,10 @@ async def check_rate_limit(
     max_requests: int = 60,
     window_seconds: int = 60,
 ) -> bool:
-    key = _rate_limit_key(request)
+    key, _ = _rate_limit_key(request)
     now = time.time()
+    # Unique member so concurrent requests can be refunded independently.
+    member = f"{now:.6f}:{id(request)}"
 
     redis = await _get_redis()
     if redis:
@@ -98,9 +104,11 @@ async def check_rate_limit(
             pipe = redis.pipeline()
             pipe.zremrangebyscore(key, 0, now - window_seconds)
             pipe.zcard(key)
-            pipe.zadd(key, {str(now): now})
+            pipe.zadd(key, {member: now})
             pipe.expire(key, window_seconds)
             _, count, _, _ = await pipe.execute()
+            setattr(request.state, _RL_KEY_STATE, key)
+            setattr(request.state, _RL_MEMBER_STATE, member)
             return int(count) <= max_requests
         except Exception:
             pass
@@ -113,15 +121,46 @@ async def check_rate_limit(
         if count >= max_requests:
             return False
         _in_memory[key].append(now)
+        setattr(request.state, _RL_KEY_STATE, key)
+        setattr(request.state, _RL_TS_STATE, now)
         return True
+
+
+async def refund_rate_limit(request: Request) -> None:
+    """Undo a counted request (e.g. 401) so auth storms do not lock out the client."""
+    key = getattr(request.state, _RL_KEY_STATE, None)
+    if not key:
+        return
+
+    redis = await _get_redis()
+    member = getattr(request.state, _RL_MEMBER_STATE, None)
+    if redis and member:
+        try:
+            await redis.zrem(key, member)
+            return
+        except Exception:
+            pass
+
+    ts = getattr(request.state, _RL_TS_STATE, None)
+    if ts is None:
+        return
+    async with _lock:
+        stamps = _in_memory.get(key)
+        if not stamps:
+            return
+        try:
+            stamps.remove(ts)
+        except ValueError:
+            pass
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        max_requests: int = 60,
+        max_requests: int = 300,
         window_seconds: int = 60,
+        anon_max_requests: int | None = None,
         exclude_paths: tuple[str, ...] = (
             "/health",
             "/health/ready",
@@ -134,15 +173,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        self.anon_max_requests = (
+            anon_max_requests
+            if anon_max_requests is not None
+            else getattr(settings, "rate_limit_anon_max_requests", 60)
+        )
         self.exclude_paths = exclude_paths
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if request.url.path in self.exclude_paths:
             return await call_next(request)
 
-        max_req = self.max_requests
         window = self.window_seconds
         path = request.url.path or ""
+        _, authed = _rate_limit_key(request)
+        max_req = self.max_requests if authed else self.anon_max_requests
         # Stricter throttle for invite preview/accept (brute-force codes).
         if "/company-invites/" in path or path.startswith("/api/v1/invites/"):
             max_req = min(max_req, 20)
@@ -150,27 +195,29 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         allowed = await check_rate_limit(request, max_req, window)
         if not allowed:
-            # Return a response — do not raise HTTPException from BaseHTTPMiddleware
-            # (Starlette turns that into an unhandled 500).
-            headers: dict[str, str] = {"Retry-After": str(window)}
-            origin = request.headers.get("origin")
-            if origin:
-                headers["Access-Control-Allow-Origin"] = origin
-                headers["Vary"] = "Origin"
-                headers["Access-Control-Allow-Credentials"] = "true"
-            return JSONResponse(
+            raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={
-                    "error": {
-                        "code": "rate_limited",
-                        "message": "Too many requests",
-                    }
-                },
-                headers=headers,
+                detail="Too many requests",
+                headers={"Retry-After": str(window)},
             )
 
-        return await call_next(request)
+        response = await call_next(request)
+        # Invalid/expired sessions must not burn the bucket — otherwise a 401
+        # fan-out locks the client into 429 until the window expires.
+        if response.status_code == status.HTTP_401_UNAUTHORIZED:
+            await refund_rate_limit(request)
+        return response
 
 
-def add_rate_limiting(app: FastAPI, max_requests: int = 60, window_seconds: int = 60) -> None:
-    app.add_middleware(RateLimitMiddleware, max_requests=max_requests, window_seconds=window_seconds)
+def add_rate_limiting(
+    app: FastAPI,
+    max_requests: int = 300,
+    window_seconds: int = 60,
+    anon_max_requests: int | None = None,
+) -> None:
+    app.add_middleware(
+        RateLimitMiddleware,
+        max_requests=max_requests,
+        window_seconds=window_seconds,
+        anon_max_requests=anon_max_requests,
+    )
