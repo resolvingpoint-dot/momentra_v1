@@ -7,6 +7,8 @@ this router without a prefix.
 """
 from __future__ import annotations
 
+import hashlib
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -15,6 +17,14 @@ from app.core.config import settings
 from app.core.database import ping_db
 
 router = APIRouter(tags=["health"])
+
+
+def _session_secret_fp() -> str:
+    """Non-secret fingerprint so ops can confirm which key the API is using."""
+    raw = (settings.effective_session_secret or "").encode("utf-8")
+    if not raw:
+        return "missing"
+    return hashlib.sha256(raw).hexdigest()[:12]
 
 
 async def _ping_celery_broker() -> bool:
@@ -32,7 +42,13 @@ async def _ping_celery_broker() -> bool:
 @router.get("/health", summary="Liveness probe")
 async def health() -> dict:
     """Liveness probe — no external dependencies."""
-    return {"status": "ok", "app": settings.app_name, "version": settings.app_version}
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "version": settings.app_version,
+        "session_secret_fp": _session_secret_fp(),
+        "session_secret_len": len(settings.effective_session_secret or ""),
+    }
 
 
 @router.get("/health/ready", summary="Readiness probe")
